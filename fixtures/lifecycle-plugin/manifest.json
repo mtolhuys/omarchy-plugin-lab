@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "lab.lifecycle",
+  "name": "Plugin Lab Lifecycle Fixture",
+  "version": "1.0.0",
+  "description": "Disposable fixture used only by the Omarchy Plugin Lab.",
+  "kinds": ["service"],
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}

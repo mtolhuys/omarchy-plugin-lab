@@ -1,0 +1,228 @@
+#!/bin/bash
+
+set -euo pipefail
+
+LAB_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+[[ -f $LAB_ROOT/.lab.env ]] && source "$LAB_ROOT/.lab.env"
+
+SOURCE_ROOT="${OMARCHY_LAB_SOURCE:-/home/mtolhuijs/Projects/omarchy/plugin-integrations}"
+ISO_ROOT="${OMARCHY_LAB_ISO_ROOT:-/home/mtolhuijs/Projects/omarchy/omarchy-iso}"
+PKGS_ROOT="${OMARCHY_LAB_PKGS_ROOT:-/home/mtolhuijs/Projects/omarchy/omarchy-pkgs}"
+ISO="${OMARCHY_LAB_ISO:-$ISO_ROOT/release/omarchy-4.0.1.iso}"
+MEMORY="${OMARCHY_LAB_MEMORY:-5120}"
+SSH_PORT="${OMARCHY_LAB_SSH_PORT:-2222}"
+
+fail() {
+  echo "omarchy-plugin-lab: $*" >&2
+  exit 1
+}
+
+iso_base_name() {
+  basename "$ISO" .iso
+}
+
+base_dir() {
+  printf '%s/test-runs/%s\n' "$ISO_ROOT" "$(iso_base_name)"
+}
+
+base_ready() {
+  [[ -f $(base_dir)/base.qcow2 && -f $(base_dir)/.plugin-lab-ready ]]
+}
+
+doctor() {
+  local failed=0 cmd
+
+  printf 'Omarchy Plugin Lab\n\n'
+  printf '  Source:    %s\n' "$SOURCE_ROOT"
+  printf '  ISO repo:  %s\n' "$ISO_ROOT"
+  printf '  Packages:  %s\n' "$PKGS_ROOT"
+  printf '  ISO:       %s\n' "$ISO"
+  printf '  Memory:    %s MiB\n' "$MEMORY"
+  printf '  SSH port:  127.0.0.1:%s\n\n' "$SSH_PORT"
+
+  [[ $(uname -m) == "x86_64" ]] || { echo 'not ok - host architecture is not x86_64'; failed=1; }
+  [[ -c /dev/kvm && -r /dev/kvm && -w /dev/kvm ]] || { echo 'not ok - /dev/kvm is unavailable'; failed=1; }
+  [[ -d $SOURCE_ROOT/.git || -f $SOURCE_ROOT/.git ]] || { echo 'not ok - source checkout is missing'; failed=1; }
+  [[ -x $ISO_ROOT/bin/omarchy-iso-test ]] || { echo 'not ok - ISO harness is missing'; failed=1; }
+  grep -Fq -- '--dev-link' "$ISO_ROOT/bin/omarchy-iso-test" || { echo 'not ok - ISO harness lacks the plugin-lab dev-link extension'; failed=1; }
+  grep -Fq -- '--host-test' "$ISO_ROOT/bin/omarchy-iso-test" || { echo 'not ok - ISO harness lacks the plugin-lab host-test extension'; failed=1; }
+  [[ -f $ISO ]] || { echo 'not ok - verified Omarchy ISO is missing'; failed=1; }
+
+  for cmd in qemu-system-x86_64 qemu-img socat magick tesseract ssh tar jq git; do
+    if ! command -v "$cmd" >/dev/null; then
+      echo "not ok - required command is missing: $cmd"
+      failed=1
+    fi
+  done
+
+  if [[ -f $ISO && -f $ISO.sha256 ]]; then
+    if (cd "$(dirname "$ISO")" && sha256sum -c "$(basename "$ISO").sha256" >/dev/null); then
+      echo 'ok - official ISO checksum matches'
+    else
+      echo 'not ok - official ISO checksum does not match'
+      failed=1
+    fi
+  else
+    echo 'not ok - ISO checksum sidecar is missing'
+    failed=1
+  fi
+
+  if ((failed)); then
+    exit 1
+  fi
+
+  echo 'ok - KVM acceleration is available'
+  echo 'ok - source, harness, packages, and host tools are ready'
+}
+
+prepare() {
+  local fresh=false
+  if [[ ${1:-} == "--fresh" ]]; then
+    fresh=true
+    shift
+  fi
+  (( $# == 0 )) || fail "Usage: lab prepare [--fresh]"
+
+  doctor
+  if base_ready && $fresh == false; then
+    echo "Reusable base already exists: $(base_dir)/base.qcow2"
+    return 0
+  fi
+
+  if [[ -d $(base_dir) ]]; then
+    if ! $fresh; then
+      fail "An incomplete or unverified base exists. Preserve it and retry with: $LAB_ROOT/bin/lab prepare --fresh"
+    fi
+
+    local preserved="$(base_dir).replaced.$(date -u +%Y%m%d%H%M%S)"
+    mv "$(base_dir)" "$preserved"
+    echo "Preserved the previous base and artifacts at: $preserved"
+  fi
+
+  "$ISO_ROOT/bin/omarchy-iso-test" "$ISO" \
+    --install-only --memory "$MEMORY" --port "$SSH_PORT" --no-preview
+  touch "$(base_dir)/.plugin-lab-ready"
+}
+
+fast() {
+  base_ready || fail "No verified reusable base. Run: $LAB_ROOT/bin/lab prepare"
+  export OMARCHY_LAB_PKGS_SOURCE="$PKGS_ROOT"
+  export OMARCHY_LAB_ISO_SOURCE="$ISO_ROOT"
+  export OMARCHY_LAB_SOURCE_TESTS="$*"
+  accept --host-test "$LAB_ROOT/host-tests/repository-suite.sh" --host-test-only
+}
+
+accept() {
+  base_ready || fail "No verified reusable base. Run: $LAB_ROOT/bin/lab prepare"
+
+  "$ISO_ROOT/bin/omarchy-iso-test" "$ISO" \
+    --reuse-base \
+    --sync-all "$SOURCE_ROOT" \
+    --dev-link \
+    --memory "$MEMORY" \
+    --port "$SSH_PORT" \
+    --no-preview \
+    "$@"
+}
+
+accept_host() {
+  local host_test="${1:-}"
+  [[ -n $host_test ]] || fail "Usage: lab accept-host <host-test-file>"
+  [[ $host_test == /* ]] || host_test="$LAB_ROOT/$host_test"
+  [[ -f $host_test ]] || fail "Host test not found: $host_test"
+  accept --host-test "$host_test"
+}
+
+plugin_test() {
+  local host_test="${1:-$LAB_ROOT/host-tests/plugin-lifecycle.sh}"
+  [[ $host_test == /* ]] || host_test="$LAB_ROOT/$host_test"
+  [[ -f $host_test ]] || fail "Plugin test not found: $host_test"
+  accept --host-test "$host_test" --host-test-only
+}
+
+accept_keep() {
+  accept --keep-running
+}
+
+shell_guest() {
+  local key="$(base_dir)/id_ed25519"
+  [[ -f $key ]] || fail "Lab SSH key is missing; prepare the base first"
+
+  exec ssh -i "$key" -p "$SSH_PORT" \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
+    omarchy@127.0.0.1
+}
+
+latest() {
+  local run
+  run=$(find "$(base_dir)/runs" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+  [[ -n $run ]] || fail "No lab runs found"
+  printf '%s\n' "$run"
+}
+
+status() {
+  doctor
+  echo
+  if base_ready; then
+    echo "ok - reusable base: $(base_dir)/base.qcow2"
+    qemu-img info "$(base_dir)/base.qcow2" | sed -n '1,8p'
+  else
+    echo 'pending - no verified reusable base has been prepared'
+  fi
+  if run=$(latest 2>/dev/null); then
+    echo "latest - $run"
+  fi
+}
+
+build_iso() {
+  "$ISO_ROOT/bin/omarchy-iso-make" --no-boot-offer --keep-pkg-cache \
+    --local-source "$SOURCE_ROOT" "$PKGS_ROOT"
+
+  local built
+  built=$(find "$ISO_ROOT/release" -maxdepth 1 -type f -name '*-local.iso' \
+    -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+  [[ -n $built ]] || fail "The local ISO build finished without an ISO artifact"
+  (cd "$(dirname "$built")" && sha256sum "$(basename "$built")" >"$(basename "$built").sha256")
+  echo "Local ISO: $built"
+  echo "Set OMARCHY_LAB_ISO=$built in .lab.env, then run: ./bin/lab prepare"
+}
+
+usage() {
+  cat <<USAGE
+Usage: ./bin/lab <command>
+
+Commands:
+  doctor                     Verify host isolation, dependencies, and ISO
+  status                     Show lab readiness and reusable base details
+  fast [test-files...]       Run all or selected source tests in a fresh VM
+  prepare [--fresh]          Create the reusable installed VM base once
+  accept [harness-options]   Run a fresh dev-linked disposable VM acceptance
+  accept-host <file>         Run host/QMP test plus normal acceptance
+  plugin [host-test]         Run a focused plugin test in a fresh VM overlay
+  accept-keep                Run acceptance and leave the VM available
+  shell                      SSH into a VM left by accept-keep
+  latest                     Print the newest evidence directory
+  build                      Build an ISO from local Omarchy/package sources
+USAGE
+}
+
+command="${1:-}"
+(( $# > 0 )) && shift
+
+case "$command" in
+  doctor) doctor "$@" ;;
+  status) status "$@" ;;
+  fast) fast "$@" ;;
+  prepare) prepare "$@" ;;
+  accept) accept "$@" ;;
+  accept-host) accept_host "$@" ;;
+  plugin) plugin_test "$@" ;;
+  accept-keep) accept_keep "$@" ;;
+  shell) shell_guest "$@" ;;
+  latest) latest "$@" ;;
+  build) build_iso "$@" ;;
+  -h|--help|help|'') usage ;;
+  *) fail "Unknown command: $command" ;;
+esac
