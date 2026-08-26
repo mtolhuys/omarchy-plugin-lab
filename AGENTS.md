@@ -11,6 +11,7 @@ This directory is the safe execution boundary for Omarchy plugin and native desk
 5. Run `./bin/lab plugin <host-test>` for a feature-specific plugin scenario.
 6. Use `./bin/lab accept` only for the broad desktop regression suite. Its ISO and source checkout must be from compatible revisions.
 7. Treat the timestamped result directory printed by the harness as the evidence source. Never claim real-session acceptance from host tests or screenshots alone.
+8. Treat install/update/rescan success as file-state evidence, not runtime proof. For hot-loaded plugins, assert the loaded build identity and behavior of every independently loaded entry point, then inspect post-reload logs.
 
 The VM commands synchronize the complete source checkout, dev-link the disposable guest to it, and start a fresh graphical login so every user-session layer reads the checkout. `plugin` runs only the requested host-driven scenario. `accept` additionally runs hardware-level shortcut smoke tests and the broad in-guest Omarchy suite. A run overlay is disposable; the reusable installed base must remain unchanged.
 
@@ -30,6 +31,12 @@ The VM commands synchronize the complete source checkout, dev-link the disposabl
 A host test is a trusted Bash file defining `omarchy_host_test()`. The official ISO harness sources it after the disposable guest has booted from the synchronized dev checkout. It may use the harness helpers `press`, `ssh_guest`, `ssh_session`, `capture_console`, `wait_for_guest_state`, and the artifact path in `RUN_DIR`.
 
 Use QMP `press` for global shortcut proof. In-guest `wtype` is not evidence that Hyprland received a real global key chord.
+
+For clickable, touchable, pointer, drag, or hover UI, send QMP pointer events to
+the rendered control and assert the resulting public state. Calling its IPC or
+function directly proves the backend but not hit testing. Confirm the test
+precondition too: the control must not be covered by fullscreen content or
+another layer.
 
 ## Repositories
 

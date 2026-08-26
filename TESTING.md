@@ -36,7 +36,46 @@ Kopieer `host-tests/example.sh` en definieer `omarchy_host_test()`. Beschikbare 
 - `wait_for_guest_state`: wacht begrensd op een machine-assertie;
 - `capture_console`: bewaart een visueel checkpoint.
 
+Voor een absolute pointer/touch-tap kan een scenario
+`host-tests/helpers/pointer.sh` sourcen en
+`qmp_pointer_tap <breedte> <hoogte> <x> <y> [left|right|middle]` gebruiken. De
+helper valideert de viewportcoördinaten en QMP-responses; de scenarioassertie
+moet nog steeds bewijzen dat het bedoelde control zichtbaar was en reageerde.
+
 Elke belangrijke gebruikersactie hoort een machine-assertie te hebben. Een screenshot is aanvullend bewijs, geen vervanging voor statuscontrole.
+
+## Hot reload en runtime-identiteit
+
+Een geslaagde `plugin add`, `plugin update`, rescan of manifestvalidatie bewijst
+alleen de toestand op schijf. Quickshell kan een nieuw QML-component afwijzen
+terwijl het oude object zichtbaar blijft, en Qt kan componenten per URL cachen.
+Een scenario voor een hot-loaded plugin hoort daarom:
+
+1. de bron- en geïnstalleerde revisie/manifestversie te vergelijken;
+2. iedere onafhankelijk geladen runtime-eenheid een build-identiteit te laten
+   rapporteren, bijvoorbeeld service én barwidget;
+3. die identiteiten na update/rescan te vergelijken met de manifestversie;
+4. de shell-log vanaf de reloadgrens te controleren op entrypoint- en
+   dependencyfouten;
+5. minstens één nieuw of gewijzigd publiek gedrag te asserten.
+
+Een oud scherm dat er aannemelijk uitziet is geen succes. Wanneer actuele
+Qt/Quickshell-versies aantoonbaar componenten op URL vasthouden, versioneer dan
+de volledige uitvoerbare QML/JS-graaf als één eenheid. Alleen het root-entrypoint
+verplaatsen kan een nieuwe root met oude imports combineren.
+
+## Pointer- en barcontracten
+
+Lees vóór implementatie de actuele hostcomponent die een widget of panel
+mount. De host kan de bovenste pointerlaag, cross-axis-afmetingen,
+clickregistratie en forwarding-API bezitten. Een eigen `MouseArea` kan daardoor
+correct renderen maar nooit input krijgen.
+
+Klik- en touchgedrag vereist een QMP-pointeractie op het gerenderde control,
+gevolgd door een machine-assertie van het publieke effect. Controleer vooraf dat
+het control werkelijk zichtbaar en niet door fullscreencontent of een andere
+layer bedekt is. Assert daarnaast de barhoogte/uitlijning; een compacte breedte
+mag geen verticale padding of verkleind hit target introduceren.
 
 ## Bekende fixturebevindingen
 

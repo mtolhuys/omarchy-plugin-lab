@@ -113,6 +113,15 @@ Lokale overrides kunnen in `.lab.env`; zie `lab.env.example`. Dat bestand wordt 
 
 De officiële harness bewaart iedere run onder `omarchy-iso/test-runs/<iso>/runs/<timestamp>/`. Daar staan serial logs, install logs, screenshots en de artifacts uit de in-guest suite. Een feature is pas bewezen wanneer zowel machine-asserties als deze artifacts het verwachte gedrag laten zien.
 
+Bij hot-reloadbare Quickshell-plugins betekent een geslaagde
+installatie/update/rescan alleen dat de bestanden en configuratie zijn
+bijgewerkt. De draaiende shell kan een vervangend component afwijzen of een oud
+component uit de QML-cache behouden. Laat een scenario daarom de geladen
+service- en widgetbuild vergelijken met de geïnstalleerde manifestversie,
+controleer de logs na de reload en bewijs de nieuwe werking. Voor klik- of
+touchbediening moet QMP daadwerkelijk op het zichtbare control klikken; IPC
+alleen bewijst de backend niet.
+
 Een overlay met bewijs is momenteel grofweg 0,5–0,6 GiB. Bewaar geslaagde referentieruns en ruim oude mislukte timestampmappen bewust op wanneer het bewijs niet meer nodig is; de herbruikbare `base.qcow2` hoort te blijven staan.
 
 Zie [TESTING.md](TESTING.md) voor de bewijsladder, bekende fixturebeperkingen en een recept voor nieuwe scenario's.
