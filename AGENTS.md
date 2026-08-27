@@ -35,6 +35,8 @@ The VM commands synchronize the complete source checkout, dev-link the disposabl
 
 A host test is a trusted Bash file defining `omarchy_host_test()`. The official ISO harness sources it after the disposable guest has booted from the synchronized dev checkout. It may use the harness helpers `press`, `ssh_guest`, `ssh_session`, `capture_console`, `wait_for_guest_state`, and the artifact path in `RUN_DIR`.
 
+Keep product-specific scenarios and fixtures in the product repository and pass their path to the lab command. This repository may contain only the generic lifecycle gate, repository runner, helpers, and minimal examples required to operate the lab.
+
 Use QMP `press` for global shortcut proof. In-guest `wtype` is not evidence that Hyprland received a real global key chord.
 
 For clickable, touchable, pointer, drag, or hover UI, send QMP pointer events to

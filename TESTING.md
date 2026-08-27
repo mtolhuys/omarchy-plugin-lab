@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Source suite | `./bin/lab fast` | Parsers, scripts, QML and JavaScript contracts, and regressions executed in a disposable guest | Global shortcuts or a complete installation |
 | Plugin | `./bin/lab plugin` | Current plugin lifecycle behavior in a real disposable Hyprland and Quickshell session | A complete installation or every Omarchy application |
-| Scenario | `./bin/lab plugin host-tests/<test>.sh` | The concrete plugin or keybinding behavior asserted by that test | Behavior the scenario does not assert |
+| Scenario | `./bin/lab plugin /path/to/plugin/tests/lab/<test>.sh` | The concrete plugin or keybinding behavior asserted by that product-owned test | Behavior the scenario does not assert |
 | Broad | `./bin/lab accept` | Core shortcuts and the complete Omarchy acceptance suite | Compatibility when the ISO and source checkout come from different revisions |
 | Installation | Build a local ISO, prepare a new base, then run `accept` | Packaging, installation, fixed system files, and desktop behavior together | Hardware that is not passed through to the VM |
 
@@ -42,9 +42,9 @@ Run final acceptance against one clean, committed candidate. Compare the source 
 
 The run writes `host-test.log`, two lifecycle screenshots, a serial log, and the installation log to the timestamped result directory.
 
-## Adding a scenario
+## Adding a product-owned scenario
 
-Copy `host-tests/example.sh` and define `omarchy_host_test()`. The available helpers are:
+Copy `host-tests/example.sh` into the product repository and define `omarchy_host_test()` there. Do not add product-specific tests or fixtures to this repository. The available helpers are:
 
 - `press`: sends a real virtual key or chord through QMP;
 - `ssh_guest`: checks ordinary guest state;
@@ -78,4 +78,3 @@ Click and touch behavior requires a QMP pointer action on the rendered control, 
 
 - The official Omarchy 4.0.1 ISO installs and starts in the lab, but the tested unencrypted fixture can hang on a Limine or resume message after a later full reboot. Source activation therefore uses a complete graphical logout and login, which rebuilds every user-session environment without masking this separate ISO issue.
 - The current `quattro` source expects newer package and application contents in several places than the published 4.0.1 ISO provides. The focused plugin test is independent of that skew. For a reliable broad regression, run `./bin/lab build` and create a dedicated base from the resulting local ISO.
-- The 4.0.1 fixture logs `Key <LFSH> added to map for multiple modifiers` during each `wtype` virtual-keyboard lifecycle. Omarchy's `shift:both_capslock_cancel` XKB option intentionally assigns both `Shift_L` and `Caps_Lock` to the Shift keys; the older libxkbcommon in this fixture warns when the compositor recompiles that keymap. This is not a stuck modifier. The on-screen keyboard scenario distinguishes the two by proving a physical QMP Super+Space action immediately after cancellation, backend failure, hide, update, disablement, and removal.

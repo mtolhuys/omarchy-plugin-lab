@@ -61,9 +61,9 @@ Then choose the smallest proof that answers your question:
 | --- | --- | --- |
 | Source contracts and regressions | `./bin/lab fast` | Complete source suite in a disposable guest |
 | Plugin lifecycle | `./bin/lab plugin` | Add, enable, disable, re-enable, remove, and configuration cleanup |
-| A specific plugin behavior | `./bin/lab plugin host-tests/my-plugin-test.sh` | A trusted scenario in the real graphical session |
+| A specific plugin behavior | `./bin/lab plugin /path/to/plugin/tests/lab/acceptance.sh` | A product-owned scenario in the real graphical session |
 | Broad desktop regression | `./bin/lab accept` | Omarchy’s in-guest suite and shortcut smoke tests |
-| Custom broad acceptance | `./bin/lab accept-host host-tests/my-test.sh` | Your scenario alongside the broad regression suite |
+| Custom broad acceptance | `./bin/lab accept-host /path/to/plugin/tests/lab/acceptance.sh` | Your product-owned scenario alongside the broad regression suite |
 | Manual inspection | `./bin/lab accept-keep` then `./bin/lab shell` | A retained guest accessible over SSH |
 
 Show the artifacts from the latest run:
@@ -74,9 +74,11 @@ Show the artifacts from the latest run:
 
 ## Write a scenario for the user journey
 
-Copy [`host-tests/example.sh`](host-tests/example.sh), then define
-`omarchy_host_test()`. The official ISO harness sources it after the disposable
-guest boots from the synchronized checkout.
+Copy [`host-tests/example.sh`](host-tests/example.sh) into the plugin repository,
+then define `omarchy_host_test()` there. Product-specific scenarios and fixtures
+belong with the product, not in this lab repository. The official ISO harness
+sources the supplied scenario after the disposable guest boots from the
+synchronized checkout.
 
 ```bash
 press meta_l-spc
@@ -103,7 +105,7 @@ Pair every meaningful action with an observable assertion.
 | --- | --- | --- | --- |
 | Source suite | `./bin/lab fast` | Parsers, scripts, QML, JavaScript, and regressions | Global shortcuts or a complete installation |
 | Plugin | `./bin/lab plugin` | Current lifecycle behavior in Hyprland + Quickshell | Every Omarchy application or installation path |
-| Scenario | `./bin/lab plugin host-tests/<test>.sh` | The concrete behavior the scenario asserts | Behavior it does not assert |
+| Scenario | `./bin/lab plugin /path/to/plugin/tests/lab/<test>.sh` | The concrete behavior the product-owned scenario asserts | Behavior it does not assert |
 | Broad | `./bin/lab accept` | Core shortcuts and the complete Omarchy suite | Compatibility across mismatched ISO and source revisions |
 | Installation | Local ISO → fresh base → `accept` | Packaging, installation, fixed system files, and desktop behavior | Hardware not passed through to the VM |
 
