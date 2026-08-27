@@ -498,14 +498,14 @@ omarchy_host_test() {
      ! omarchy-shell tablet-mode status >/dev/null 2>&1" || return 1
   prove_physical_super_space "plugin removal" || return 1
   ssh_session "test -z \"\$(hyprctl configerrors)\"" || return 1
-  ssh_session "printf 'LFSH multi-modifier XKB warnings during gate: '; \
+  ssh_session "printf 'Expected XKB option recompilation warnings during wtype lifecycle: '; \
     journalctl --user -b --no-pager 2>/dev/null | grep -c 'Key <LFSH> added to map for multiple modifiers' || true" || return 1
   ssh_guest "echo '$GUEST_PASSWORD' | sudo -S rm -f /usr/local/bin/hyprctl /usr/local/bin/wtype" || return 1
   ssh_session "rm -f /tmp/omarchy-tablet-detector-devices.json /tmp/omarchy-tablet-wtype-fail \
     /tmp/omarchy-tablet-wtype-hold" || return 1
   capture_console "success-tablet-07-removed"
 
-  printf 'ok - tablet mode phase-1 lifecycle, pointer typing, focus and cleanup passed\n'
+  printf 'ok - tablet mode lifecycle, pointer typing, focus and cleanup passed\n'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
