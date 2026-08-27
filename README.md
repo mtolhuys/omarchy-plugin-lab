@@ -1,120 +1,155 @@
 # Omarchy Plugin Lab
 
-A local, disposable Omarchy environment for plugin, Hyprland, Quickshell, and native desktop development without using the daily host installation as a test target.
+> A disposable KVM desktop for proving Omarchy plugins where they actually run.
 
-## Architecture
+![A real disposable Omarchy session: a plugin UI, QMP-driven interaction, and input reaching a Wayland client.](assets/real-desktop-proof.gif)
 
 ```text
-host source checkout
-        |
-        | tar over localhost SSH
-        v
-reusable Omarchy 4.0.1 base image
-        |
-        | qcow2 copy-on-write overlay per run
-        v
-disposable KVM guest
-  - dev-linked to synced source
-  - fresh graphical login activates all user-session paths
-  - real Hyprland + Quickshell
-  - QMP virtual keyboard input
-  - guest assertions over SSH
-        |
-        v
-logs + state dumps + screenshots
+ source checkout ──dev-link──> disposable Omarchy session ──> evidence
+                                  Hyprland + Quickshell        logs · state · screenshots
 ```
 
-Docker can test scripts and parsers, but it cannot prove compositor bindings, QML runtime behavior, shell lifecycle, or desktop interactions. The lab therefore uses the official `omarchy-iso-test` harness with KVM. The reusable installed base remains clean; every acceptance run uses a new copy-on-write overlay that can be discarded afterward.
+Omarchy Plugin Lab is a local environment for developing and testing Omarchy
+plugins, Hyprland integrations, Quickshell components, and native desktop
+behavior—without using the daily host installation as a test target.
 
-## Daily use
+It is built for the boundaries unit tests cannot settle: a fresh graphical
+login, a real compositor, global shortcuts, pointer input, shell lifecycle,
+hot reloads, and the artifacts needed to explain a result later.
 
-Check the environment:
+## What it makes practical
+
+| Build | Prove in the lab |
+| --- | --- |
+| A Quickshell plugin | Install, enable, disable, re-enable, remove, and clean up in a real shell session |
+| A Hyprland shortcut or UI control | The actual QMP key or pointer event reaches the visible control and has the expected effect |
+| A hot-reloadable widget or service | The loaded runtime—not just the files on disk—matches the version and behavior you shipped |
+| An installer, package, systemd, or `/etc` change | A local ISO installs and passes desktop acceptance from a fresh base |
+
+The installed base remains clean. Every run uses a fresh copy-on-write overlay,
+while timestamped logs, state dumps, screenshots, and test artifacts stay
+available as evidence.
+
+## Start here
+
+Check that the selected source checkout, ISO harness, KVM, and dependencies are
+ready:
 
 ```bash
 ./bin/lab doctor
 ```
 
-Run the complete source suite in an isolated VM overlay:
+Example from this checkout:
 
-```bash
-./bin/lab fast
+```text
+Omarchy Plugin Lab
+
+  Source:    /home/mtolhuijs/Projects/omarchy/plugin-integrations
+  ISO:       .../omarchy-4.0.1.iso
+  Memory:    5120 MiB
+  SSH port:  127.0.0.1:2222
+
+ok - official ISO checksum matches
+ok - KVM acceleration is available
+ok - source, harness, packages, and host tools are ready
 ```
 
-These tests deliberately do not run on the host. Some nominally headless Omarchy tests start Quickshell or cross privileged code paths, which is not an acceptable risk in a daily desktop session.
-
-Create the reusable Omarchy base image once:
+Create the reusable installed base once:
 
 ```bash
 ./bin/lab prepare
 ```
 
-Then run the focused plugin lifecycle test:
+Then choose the smallest proof that answers your question:
 
-```bash
-./bin/lab plugin
-```
+| Goal | Command | Coverage |
+| --- | --- | --- |
+| Source contracts and regressions | `./bin/lab fast` | Complete source suite in a disposable guest |
+| Plugin lifecycle | `./bin/lab plugin` | Add, enable, disable, re-enable, remove, and configuration cleanup |
+| A specific plugin behavior | `./bin/lab plugin host-tests/my-plugin-test.sh` | A trusted scenario in the real graphical session |
+| Broad desktop regression | `./bin/lab accept` | Omarchy’s in-guest suite and shortcut smoke tests |
+| Custom broad acceptance | `./bin/lab accept-host host-tests/my-test.sh` | Your scenario alongside the broad regression suite |
+| Manual inspection | `./bin/lab accept-keep` then `./bin/lab shell` | A retained guest accessible over SSH |
 
-This is the routine plugin test. It synchronizes the complete checkout, dev-links the guest to that checkout, and starts a fresh graphical login. In a real Hyprland and Quickshell session it then proves add, enable, disable, re-enable, and removal behavior, including configuration cleanup. The base image is not modified.
-
-Use the same route for a feature-specific plugin scenario:
-
-```bash
-./bin/lab plugin host-tests/my-plugin-test.sh
-```
-
-The broad Omarchy regression suite is separate:
-
-```bash
-./bin/lab accept
-```
-
-It also operates Omarchy's standard shortcuts through QMP and runs the complete in-guest suite. Use an ISO and source checkout from compatible revisions. The published 4.0.1 ISO and the current `quattro` branch have diverged, so expected application or menu differences must not be misclassified as plugin regressions.
-
-To coordinate QMP input and SSH assertions in a custom broad acceptance test:
-
-```bash
-./bin/lab accept-host host-tests/example.sh
-```
-
-`accept-host` combines the custom test with the broad regression suite. For normal plugin development, `lab plugin` is faster and produces less unrelated noise.
-
-Keep the VM running after a test and open a shell:
-
-```bash
-./bin/lab accept-keep
-./bin/lab shell
-```
-
-Show the latest artifact directory:
+Show the artifacts from the latest run:
 
 ```bash
 ./bin/lab latest
 ```
 
-## Full local ISO build
+## Write a scenario for the user journey
 
-Normal plugin iterations do not require a new ISO. Build one from the local Omarchy and package checkouts when packaging, installation, systemd units, or fixed system files change:
+Copy [`host-tests/example.sh`](host-tests/example.sh), then define
+`omarchy_host_test()`. The official ISO harness sources it after the disposable
+guest boots from the synchronized checkout.
+
+```bash
+press meta_l-spc
+wait_for_guest_state "Omarchy menu opens" 10 ssh_session \
+  "hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-menu\")] | length >= 1'"
+capture_console "success-menu-shortcut"
+```
+
+The harness provides:
+
+- `press` for real virtual keys and chords through QMP.
+- `ssh_guest` for ordinary guest state and `ssh_session` for the active Wayland/Hyprland environment.
+- `wait_for_guest_state` for bounded machine assertions.
+- `capture_console` for visual checkpoints saved beside the logs.
+- [`host-tests/helpers/pointer.sh`](host-tests/helpers/pointer.sh) and `qmp_pointer_tap` for visible pointer or touch controls.
+
+Drive the same route a user will take. An IPC call proves a backend path, not
+hit testing. A successful rescan proves file state, not a hot-loaded runtime.
+Pair every meaningful action with an observable assertion.
+
+## Evidence levels
+
+| Level | Command | Establishes | Does not establish |
+| --- | --- | --- | --- |
+| Source suite | `./bin/lab fast` | Parsers, scripts, QML, JavaScript, and regressions | Global shortcuts or a complete installation |
+| Plugin | `./bin/lab plugin` | Current lifecycle behavior in Hyprland + Quickshell | Every Omarchy application or installation path |
+| Scenario | `./bin/lab plugin host-tests/<test>.sh` | The concrete behavior the scenario asserts | Behavior it does not assert |
+| Broad | `./bin/lab accept` | Core shortcuts and the complete Omarchy suite | Compatibility across mismatched ISO and source revisions |
+| Installation | Local ISO → fresh base → `accept` | Packaging, installation, fixed system files, and desktop behavior | Hardware not passed through to the VM |
+
+See [TESTING.md](TESTING.md) for the full release gate, runtime identity rules,
+fixture findings, and scenario recipes.
+
+Use an ISO and source checkout from compatible revisions for broad acceptance.
+The published 4.0.1 ISO and the current `quattro` branch can differ in expected
+applications and menus; use a focused plugin proof when that skew is irrelevant.
+
+## Build an ISO when the system changes
+
+Ordinary plugin work does not need an ISO build. Build one when changing
+packages, the installer, systemd, `/etc`, or other fixed system files:
 
 ```bash
 ./bin/lab build
 ```
 
-Select the new ISO through an override in `.lab.env`, then create a new base with `./bin/lab prepare --fresh`.
+Set the printed ISO path in `.lab.env`, then prepare a matching base and run
+acceptance:
 
-`lab build` leaves the host package cache intact, creates a checksum next to the local ISO, and prints the exact path to place in `.lab.env`.
+```bash
+./bin/lab prepare --fresh
+./bin/lab accept
+```
+
+Start local configuration from [`lab.env.example`](lab.env.example). The real
+`.lab.env` remains untracked.
 
 ## Resources and isolation
 
-The lab reserves 5 GiB of guest memory by default, uses KVM hardware acceleration, and forwards only guest SSH to `127.0.0.1:2222`. It does not mount the host home, Wayland socket, Docker socket, SSH agent, or any physical device into the guest. A machine with 16 GiB of host memory remains usable, although a complete desktop acceptance run is noticeable.
+The default guest receives 5 GiB of memory and KVM acceleration, with SSH
+forwarded only to `127.0.0.1:2222`. A complete desktop acceptance run is
+noticeable on a 16 GiB machine, but the host remains outside the guest’s
+mounts, sockets, agents, secrets, and device list.
 
-Local overrides belong in `.lab.env`; see `lab.env.example`. That file is not committed.
+## Safety boundaries
 
-## Evidence, not just a green result
-
-The official harness stores every run under `omarchy-iso/test-runs/<iso>/runs/<timestamp>/`. Each directory contains serial logs, installation logs, screenshots, and artifacts from the in-guest suite. A feature is proven only when machine assertions and the collected evidence both support the expected behavior.
-
-For hot-reloadable Quickshell plugins, a successful install, update, or rescan proves only that files and configuration changed. The running shell may reject a replacement component or retain an old component in the QML cache. A scenario must therefore compare loaded service and widget builds with the installed manifest version, inspect logs after the reload boundary, and prove the new behavior. Click and touch behavior must be exercised on the visible control through QMP; IPC alone proves only the backend.
-
-A run overlay currently uses roughly 0.5–0.6 GiB. Preserve successful reference runs and deliberately remove obsolete failed run directories when their evidence is no longer useful. Keep the reusable `base.qcow2`.
-
-See [TESTING.md](TESTING.md) for the evidence ladder, known fixture limitations, and the recipe for new scenarios.
+- Never run Omarchy repository test entrypoints in the logged-in host session.
+- Never point `OMARCHY_LAB_SOURCE` at `/usr/share/omarchy` or host `~/.config`.
+- Never pass host secrets, agents, sockets, home directories, or physical devices into the guest for ordinary plugin work.
+- Preserve the reusable base and prior evidence; replace a base only with `./bin/lab prepare --fresh`.
+- Run the clean, committed candidate you intend to share, and keep the README, manifest, CLI, and status output aligned with what that run proved.
