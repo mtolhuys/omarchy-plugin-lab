@@ -35,7 +35,7 @@ jq -n \
   --argjson gaps "$gaps" '
   {
     plugin: ($status | {
-      runtimeBuild, widgetBuild, mode, visible, windowAdjusted, seamCorrection
+      runtimeBuild, widgetBuild, visible, windowAdjusted, seamCorrection
     }),
     window: ($window | {
       at, size, floating, fullscreen, monitor, workspace
