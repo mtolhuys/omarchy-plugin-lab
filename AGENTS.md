@@ -2,6 +2,8 @@
 
 This directory is the safe execution boundary for Omarchy plugin and native desktop experiments. Use the disposable VM for anything that activates a plugin, reloads Hyprland, restarts `omarchy-shell`, changes user configuration, or exercises global keyboard shortcuts. Do not perform those experiments on the host system.
 
+All tracked documentation, comments, fixture text, diagnostics, and user-facing output must be written in English so the repository remains ready for public collaboration.
+
 ## Required workflow
 
 1. Run `./bin/lab doctor` before a new test session.
