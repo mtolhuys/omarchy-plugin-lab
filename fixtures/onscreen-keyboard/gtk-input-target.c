@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
   if (argc != 3) return 2;
   result_path = argv[1];
   activated_path = argv[2];
-  GtkApplication *app = gtk_application_new("dev.omarchy.TabletGtkInput", G_APPLICATION_DEFAULT_FLAGS);
+  GtkApplication *app = gtk_application_new("dev.omarchy.OnscreenKeyboardGtkInput", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(app_activate), NULL);
   int status = g_application_run(G_APPLICATION(app), 1, argv);
   g_object_unref(app);

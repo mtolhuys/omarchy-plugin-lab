@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-if [[ -e /tmp/omarchy-tablet-wtype-fail ]]; then
+if [[ -e /tmp/omarchy-onscreen-keyboard-wtype-fail ]]; then
   exit 42
 fi
-if [[ -e /tmp/omarchy-tablet-wtype-hold ]]; then
+if [[ -e /tmp/omarchy-onscreen-keyboard-wtype-hold ]]; then
   exec /usr/bin/wtype -M ctrl -s 20000 -m ctrl
 fi
 exec /usr/bin/wtype "$@"

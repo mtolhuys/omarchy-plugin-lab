@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [[ ${1:-} == --wait-visible ]]; then
   for ((attempt = 0; attempt < 300; attempt++)); do
-    if omarchy-shell tablet-mode status | jq -e '.visible == true' >/dev/null 2>&1; then
+    if omarchy-shell onscreen-keyboard status | jq -e '.visible == true' >/dev/null 2>&1; then
       # Let the layer's exclusive zone and the target window settle before
       # measuring the compositor geometry.
       sleep 0.5
@@ -12,8 +12,8 @@ if [[ ${1:-} == --wait-visible ]]; then
     fi
     sleep 0.1
   done
-  omarchy-shell tablet-mode status | jq -e '.visible == true' >/dev/null || {
-    printf 'Timed out waiting for the tablet keyboard to become visible.\n' >&2
+  omarchy-shell onscreen-keyboard status | jq -e '.visible == true' >/dev/null || {
+    printf 'Timed out waiting for the on-screen keyboard to become visible.\n' >&2
     exit 1
   }
 elif [[ $# -gt 0 ]]; then
@@ -21,7 +21,7 @@ elif [[ $# -gt 0 ]]; then
   exit 2
 fi
 
-status=$(omarchy-shell tablet-mode status)
+status=$(omarchy-shell onscreen-keyboard status)
 window=$(hyprctl -j activewindow)
 layers=$(hyprctl -j layers)
 monitors=$(hyprctl -j monitors)
@@ -42,7 +42,7 @@ jq -n \
     }),
     keyboard: ([
       $layers | .. | objects |
-      select(.namespace? == "omarchy-tablet-keyboard") |
+      select(.namespace? == "omarchy-onscreen-keyboard") |
       {x, y, w, h, geometry}
     ][0] // null),
     monitor: ([
