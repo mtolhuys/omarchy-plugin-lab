@@ -249,6 +249,15 @@ omarchy_host_test() {
   wait_for_guest_state "touch Super+Space menu closes cleanly" 10 ssh_session \
     "hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-menu\")] | length == 0'" || return 1
   tap_at 1280 800 150 767 || return 1      # Ctrl
+  tap_at 1280 800 367 767 || return 1      # Super
+  tap_at 1280 800 600 767 || return 1      # Ctrl+Super+Space
+  wait_for_guest_state "Ctrl+Super+Space opens the background picker" 10 ssh_session \
+    "hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-image-selector\")] | length >= 1' && \
+     omarchy-shell tablet-mode status | jq -e '.busy == false and ([.modifiers[]] | any) == false'" || return 1
+  ssh_session "omarchy-shell shell hide omarchy.image-picker >/dev/null" || return 1
+  wait_for_guest_state "background picker closes before the theme shortcut" 10 ssh_session \
+    "hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-image-selector\")] | length == 0'" || return 1
+  tap_at 1280 800 150 767 || return 1      # Ctrl
   tap_at 1280 800 125 710 || return 1      # Shift
   tap_at 1280 800 367 767 || return 1      # Super
   wait_for_guest_state "three-modifier shortcut state is visibly latched" 5 ssh_session \
