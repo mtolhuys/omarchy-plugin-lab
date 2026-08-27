@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-ROOT=${TABLET_PLUGIN_ROOT:?Set TABLET_PLUGIN_ROOT to the staged plugin checkout}
-PLUGIN_ID=dev.omarchy.tablet-mode
+ROOT=${ONSCREEN_KEYBOARD_PLUGIN_ROOT:?Set ONSCREEN_KEYBOARD_PLUGIN_ROOT to the staged plugin checkout}
+PLUGIN_ID=dev.omarchy.onscreen-keyboard
 INSTALLED=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID
 EXPECTED=$(jq -er '.version' "$ROOT/manifest.json")
 SERVICE_ENTRY=$(jq -er '.entryPoints.service' "$ROOT/manifest.json")
@@ -17,7 +17,7 @@ omarchy plugin list --json | jq -e --arg id "$PLUGIN_ID" \
 
 STATUS=""
 attempt=0
-until STATUS=$(omarchy-shell tablet-mode status 2>/dev/null); do
+until STATUS=$(omarchy-shell onscreen-keyboard status 2>/dev/null); do
   attempt=$((attempt + 1))
   ((attempt < 25)) || break
   sleep 0.2
@@ -26,6 +26,7 @@ test -n "$STATUS"
 jq -e --arg build "$EXPECTED" '
   .runtimeBuild == $build and
   .widgetBuild == $build and
+  (.keyboardEnabled | type) == "boolean" and
   (.windowAdjusted | type) == "boolean" and
   .layout == "en-us"
 ' <<<"$STATUS" >/dev/null
