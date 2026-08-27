@@ -27,6 +27,10 @@ available as evidence.
 
 ## Start here
 
+By default, the lab expects sibling checkouts named `omarchy`, `omarchy-iso`,
+and `omarchy-pkgs`. If your layout differs, copy
+[`lab.env.example`](lab.env.example) to `.lab.env` and set absolute paths.
+
 Check that the selected source checkout, ISO harness, KVM, and dependencies are
 ready:
 
@@ -34,13 +38,13 @@ ready:
 ./bin/lab doctor
 ```
 
-Example from this checkout:
+Example output:
 
 ```text
 Omarchy Plugin Lab
 
-  Source:    /home/mtolhuijs/Projects/omarchy/plugin-integrations
-  ISO:       .../omarchy-4.0.1.iso
+  Source:    /path/to/omarchy
+  ISO:       /path/to/omarchy.iso
   Memory:    5120 MiB
   SSH port:  127.0.0.1:2222
 
@@ -110,11 +114,10 @@ Pair every meaningful action with an observable assertion.
 | Installation | Local ISO → fresh base → `accept` | Packaging, installation, fixed system files, and desktop behavior | Hardware not passed through to the VM |
 
 See [TESTING.md](TESTING.md) for the full release gate, runtime identity rules,
-fixture findings, and scenario recipes.
+and scenario recipes.
 
 Use an ISO and source checkout from compatible revisions for broad acceptance.
-The published 4.0.1 ISO and the current `quattro` branch can differ in expected
-applications and menus; use a focused plugin proof when that skew is irrelevant.
+Use a focused plugin proof when installation-level coverage is unnecessary.
 
 ## Build an ISO when the system changes
 

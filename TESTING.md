@@ -73,8 +73,3 @@ An old screen that merely looks plausible is not success. When current Qt or Qui
 Before implementation, inspect the current host component that mounts a widget or panel. The host may own the top pointer layer, cross-axis sizing, click registration, and forwarding API. A child `MouseArea` can therefore render correctly while never receiving input.
 
 Click and touch behavior requires a QMP pointer action on the rendered control, followed by a machine assertion of the public effect. First confirm that the control is visible and not covered by fullscreen content or another layer. Also assert bar height and alignment; a compact width must not introduce vertical padding or a reduced hit target.
-
-## Known fixture findings
-
-- The official Omarchy 4.0.1 ISO installs and starts in the lab, but the tested unencrypted fixture can hang on a Limine or resume message after a later full reboot. Source activation therefore uses a complete graphical logout and login, which rebuilds every user-session environment without masking this separate ISO issue.
-- The current `quattro` source expects newer package and application contents in several places than the published 4.0.1 ISO provides. The focused plugin test is independent of that skew. For a reliable broad regression, run `./bin/lab build` and create a dedicated base from the resulting local ISO.

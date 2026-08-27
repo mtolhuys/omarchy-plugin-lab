@@ -5,10 +5,11 @@ set -euo pipefail
 LAB_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 [[ -f $LAB_ROOT/.lab.env ]] && source "$LAB_ROOT/.lab.env"
 
-SOURCE_ROOT="${OMARCHY_LAB_SOURCE:-/home/mtolhuijs/Projects/omarchy/plugin-integrations}"
-ISO_ROOT="${OMARCHY_LAB_ISO_ROOT:-/home/mtolhuijs/Projects/omarchy/omarchy-iso}"
-PKGS_ROOT="${OMARCHY_LAB_PKGS_ROOT:-/home/mtolhuijs/Projects/omarchy/omarchy-pkgs}"
-ISO="${OMARCHY_LAB_ISO:-$ISO_ROOT/release/omarchy-4.0.1.iso}"
+WORKSPACE_ROOT=$(cd -- "$LAB_ROOT/.." && pwd)
+SOURCE_ROOT="${OMARCHY_LAB_SOURCE:-$WORKSPACE_ROOT/omarchy}"
+ISO_ROOT="${OMARCHY_LAB_ISO_ROOT:-$WORKSPACE_ROOT/omarchy-iso}"
+PKGS_ROOT="${OMARCHY_LAB_PKGS_ROOT:-$WORKSPACE_ROOT/omarchy-pkgs}"
+ISO="${OMARCHY_LAB_ISO:-$ISO_ROOT/release/omarchy.iso}"
 MEMORY="${OMARCHY_LAB_MEMORY:-5120}"
 SSH_PORT="${OMARCHY_LAB_SSH_PORT:-2222}"
 
@@ -38,6 +39,12 @@ tracked_dutch_prose() {
   )
   local pattern
   pattern=$(IFS='|'; printf '\\b(%s)\\b' "${markers[*]}")
+  git -C "$LAB_ROOT" grep -I -n -E "$pattern" -- .
+}
+
+tracked_personal_paths() {
+  local pattern
+  pattern='/'"home"'/[^/[:space:]]+/|/'"Users"'/[^/[:space:]]+/'
   git -C "$LAB_ROOT" grep -I -n -E "$pattern" -- .
 }
 
@@ -84,6 +91,13 @@ doctor() {
     failed=1
   else
     echo 'ok - tracked repository text is publication-ready English'
+  fi
+
+  if tracked_personal_paths; then
+    echo 'not ok - tracked repository text contains a personal home-directory path'
+    failed=1
+  else
+    echo 'ok - tracked repository text contains no personal home-directory paths'
   fi
 
   if ((failed)); then

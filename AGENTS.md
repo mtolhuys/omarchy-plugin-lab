@@ -49,8 +49,8 @@ Before calling a candidate complete, audit its README, manifest, CLI, visible la
 
 ## Repositories
 
-- Omarchy source under test: `/home/mtolhuijs/Projects/omarchy/plugin-integrations`
-- Official ISO harness: `/home/mtolhuijs/Projects/omarchy/omarchy-iso`
-- Omarchy package sources for full ISO builds: `/home/mtolhuijs/Projects/omarchy/omarchy-pkgs`
+- `OMARCHY_LAB_SOURCE`: Omarchy source checkout under test.
+- `OMARCHY_LAB_ISO_ROOT`: official ISO harness checkout.
+- `OMARCHY_LAB_PKGS_ROOT`: Omarchy package sources for full ISO builds.
 
-The ISO harness is on the local `plugin-lab` branch and carries the generic `--dev-link`, `--host-test`, and `--host-test-only` extensions. Inspect and preserve those changes when updating it from upstream.
+The ISO harness must provide the generic `--dev-link`, `--host-test`, and `--host-test-only` extensions. Inspect and preserve those changes when updating it from upstream.
