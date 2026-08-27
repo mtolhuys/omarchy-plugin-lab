@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -euo pipefail
+
+fixture=/tmp/omarchy-tablet-detector-devices.json
+if [[ ${1:-} == -j && ${2:-} == devices && -s $fixture ]]; then
+  exec /usr/bin/cat "$fixture"
+fi
+
+exec /usr/bin/hyprctl "$@"

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if [[ -e /tmp/omarchy-tablet-wtype-fail ]]; then
+  exit 42
+fi
+if [[ -e /tmp/omarchy-tablet-wtype-hold ]]; then
+  exec /usr/bin/wtype -M ctrl -s 20000 -m ctrl
+fi
+exec /usr/bin/wtype "$@"
