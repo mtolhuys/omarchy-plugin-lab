@@ -4,11 +4,6 @@
 
 ![A real disposable Omarchy session: a plugin UI, QMP-driven interaction, and input reaching a Wayland client.](assets/real-desktop-proof.gif)
 
-```text
- source checkout ──dev-link──> disposable Omarchy session ──> evidence
-                                  Hyprland + Quickshell        logs · state · screenshots
-```
-
 Omarchy Plugin Lab is a local environment for developing and testing Omarchy
 plugins, Hyprland integrations, Quickshell components, and native desktop
 behavior—without using the daily host installation as a test target.
