@@ -1,8 +1,8 @@
 # Omarchy Plugin Lab
 
-Een lokale, disposable Omarchy-omgeving voor plugin-, Hyprland-, Quickshell- en native desktopontwikkeling zonder de dagelijkse hostinstallatie als proefkonijn te gebruiken.
+A local, disposable Omarchy environment for plugin, Hyprland, Quickshell, and native desktop development without using the daily host installation as a test target.
 
-## Architectuur
+## Architecture
 
 ```text
 host source checkout
@@ -24,104 +24,97 @@ disposable KVM guest
 logs + state dumps + screenshots
 ```
 
-Docker alleen kan scripts en parsers testen, maar bewijst geen compositorbindings, QML-runtime, shell-lifecycle of desktopgedrag. Het lab gebruikt daarom de officiële `omarchy-iso-test`-harness met KVM. De eenmalig geïnstalleerde basisschijf blijft schoon; iedere acceptatierun gebruikt een nieuwe copy-on-write overlay die na afloop weg kan.
+Docker can test scripts and parsers, but it cannot prove compositor bindings, QML runtime behavior, shell lifecycle, or desktop interactions. The lab therefore uses the official `omarchy-iso-test` harness with KVM. The reusable installed base remains clean; every acceptance run uses a new copy-on-write overlay that can be discarded afterward.
 
-## Dagelijks gebruik
+## Daily use
 
-Controleer de omgeving:
+Check the environment:
 
 ```bash
 ./bin/lab doctor
 ```
 
-Draai de complete bronsuite geïsoleerd in een nieuwe VM-overlay:
+Run the complete source suite in an isolated VM overlay:
 
 ```bash
 ./bin/lab fast
 ```
 
-Ook deze tests draaien bewust niet op de host. Een deel van Omarchy's zogenaamd headless tests start Quickshell of passeert code met privilegepaden; op een dagelijks gebruikte Omarchy-sessie is dat geen acceptabel risico.
+These tests deliberately do not run on the host. Some nominally headless Omarchy tests start Quickshell or cross privileged code paths, which is not an acceptable risk in a daily desktop session.
 
-Maak eenmalig de herbruikbare Omarchy-basisschijf:
+Create the reusable Omarchy base image once:
 
 ```bash
 ./bin/lab prepare
 ```
 
-Draai daarna een volledige disposable acceptatieronde:
+Then run the focused plugin lifecycle test:
 
 ```bash
 ./bin/lab plugin
 ```
 
-Dit is de dagelijkse, gerichte pluginproef. Hij synchroniseert de volledige checkout, koppelt de gast via Omarchy's dev-link aan die checkout en begint een nieuwe grafische login. Daarna bewijst hij in een echte Hyprland/Quickshell-sessie: toevoegen, inschakelen, uitschakelen, opnieuw inschakelen en verwijderen inclusief configuratie-opruiming. De basisschijf wordt niet gewijzigd.
+This is the routine plugin test. It synchronizes the complete checkout, dev-links the guest to that checkout, and starts a fresh graphical login. In a real Hyprland and Quickshell session it then proves add, enable, disable, re-enable, and removal behavior, including configuration cleanup. The base image is not modified.
 
-Gebruik voor een eigen plugin-scenario dezelfde korte route:
+Use the same route for a feature-specific plugin scenario:
 
 ```bash
-./bin/lab plugin host-tests/mijn-plugin-test.sh
+./bin/lab plugin host-tests/my-plugin-test.sh
 ```
 
-De brede Omarchy-regressie is een aparte test:
+The broad Omarchy regression suite is separate:
 
 ```bash
 ./bin/lab accept
 ```
 
-Die test bedient ook Omarchy's standaardsneltoetsen via QMP en draait de volledige in-guest suite. Gebruik daarvoor een ISO en source checkout uit dezelfde revisie. De gepubliceerde 4.0.1-ISO en de actuele `quattro`-branch zijn inmiddels uit elkaar gelopen; verwachte applicatie- of menuwijzigingen mogen niet als pluginregressie worden geïnterpreteerd.
+It also operates Omarchy's standard shortcuts through QMP and runs the complete in-guest suite. Use an ISO and source checkout from compatible revisions. The published 4.0.1 ISO and the current `quattro` branch have diverged, so expected application or menu differences must not be misclassified as plugin regressions.
 
-Voor een test die QMP-toetsen en SSH-asserties zelf coördineert:
+To coordinate QMP input and SSH assertions in a custom broad acceptance test:
 
 ```bash
 ./bin/lab accept-host host-tests/example.sh
 ```
 
-`accept-host` combineert die eigen test met de brede regressiesuite. Voor normale pluginontwikkeling is `lab plugin` sneller en geeft het minder ruis.
+`accept-host` combines the custom test with the broad regression suite. For normal plugin development, `lab plugin` is faster and produces less unrelated noise.
 
-Laat de VM na een run aan en open daarna een shell:
+Keep the VM running after a test and open a shell:
 
 ```bash
 ./bin/lab accept-keep
 ./bin/lab shell
 ```
 
-Toon de laatst aangemaakte artifactmap:
+Show the latest artifact directory:
 
 ```bash
 ./bin/lab latest
 ```
 
-## Volledige lokale ISO-build
+## Full local ISO build
 
-Normale pluginiteraties hebben geen nieuwe ISO nodig. Wanneer packaging, installatie, systemd-units of vaste systeembestanden veranderen, bouw je wel een ISO uit de lokale Omarchy- en packagecheckouts:
+Normal plugin iterations do not require a new ISO. Build one from the local Omarchy and package checkouts when packaging, installation, systemd units, or fixed system files change:
 
 ```bash
 ./bin/lab build
 ```
 
-Gebruik die nieuwe ISO vervolgens via een override in `.lab.env` en maak een nieuwe base met `./bin/lab prepare --fresh`.
+Select the new ISO through an override in `.lab.env`, then create a new base with `./bin/lab prepare --fresh`.
 
-`lab build` laat de host-packagecache intact, maakt een checksum naast de lokale ISO en toont het exacte pad dat in `.lab.env` moet komen.
+`lab build` leaves the host package cache intact, creates a checksum next to the local ISO, and prints the exact path to place in `.lab.env`.
 
-## Resources en isolatie
+## Resources and isolation
 
-Het lab reserveert standaard 5 GiB RAM voor de gast, gebruikt KVM-hardwareacceleratie en forwardt alleen gast-SSH naar `127.0.0.1:2222`. Er wordt geen host-home, Wayland-socket, Docker-socket, SSH-agent of fysiek apparaat in de gast gemount. Met 16 GiB hostgeheugen blijft de computer bruikbaar, al is een volledige desktopacceptatieronde natuurlijk merkbaar.
+The lab reserves 5 GiB of guest memory by default, uses KVM hardware acceleration, and forwards only guest SSH to `127.0.0.1:2222`. It does not mount the host home, Wayland socket, Docker socket, SSH agent, or any physical device into the guest. A machine with 16 GiB of host memory remains usable, although a complete desktop acceptance run is noticeable.
 
-Lokale overrides kunnen in `.lab.env`; zie `lab.env.example`. Dat bestand wordt niet gecommit.
+Local overrides belong in `.lab.env`; see `lab.env.example`. That file is not committed.
 
-## Bewijs, niet alleen groen licht
+## Evidence, not just a green result
 
-De officiële harness bewaart iedere run onder `omarchy-iso/test-runs/<iso>/runs/<timestamp>/`. Daar staan serial logs, install logs, screenshots en de artifacts uit de in-guest suite. Een feature is pas bewezen wanneer zowel machine-asserties als deze artifacts het verwachte gedrag laten zien.
+The official harness stores every run under `omarchy-iso/test-runs/<iso>/runs/<timestamp>/`. Each directory contains serial logs, installation logs, screenshots, and artifacts from the in-guest suite. A feature is proven only when machine assertions and the collected evidence both support the expected behavior.
 
-Bij hot-reloadbare Quickshell-plugins betekent een geslaagde
-installatie/update/rescan alleen dat de bestanden en configuratie zijn
-bijgewerkt. De draaiende shell kan een vervangend component afwijzen of een oud
-component uit de QML-cache behouden. Laat een scenario daarom de geladen
-service- en widgetbuild vergelijken met de geïnstalleerde manifestversie,
-controleer de logs na de reload en bewijs de nieuwe werking. Voor klik- of
-touchbediening moet QMP daadwerkelijk op het zichtbare control klikken; IPC
-alleen bewijst de backend niet.
+For hot-reloadable Quickshell plugins, a successful install, update, or rescan proves only that files and configuration changed. The running shell may reject a replacement component or retain an old component in the QML cache. A scenario must therefore compare loaded service and widget builds with the installed manifest version, inspect logs after the reload boundary, and prove the new behavior. Click and touch behavior must be exercised on the visible control through QMP; IPC alone proves only the backend.
 
-Een overlay met bewijs is momenteel grofweg 0,5–0,6 GiB. Bewaar geslaagde referentieruns en ruim oude mislukte timestampmappen bewust op wanneer het bewijs niet meer nodig is; de herbruikbare `base.qcow2` hoort te blijven staan.
+A run overlay currently uses roughly 0.5–0.6 GiB. Preserve successful reference runs and deliberately remove obsolete failed run directories when their evidence is no longer useful. Keep the reusable `base.qcow2`.
 
-Zie [TESTING.md](TESTING.md) voor de bewijsladder, bekende fixturebeperkingen en een recept voor nieuwe scenario's.
+See [TESTING.md](TESTING.md) for the evidence ladder, known fixture limitations, and the recipe for new scenarios.
