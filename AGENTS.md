@@ -6,17 +6,18 @@ All tracked documentation, comments, fixture text, diagnostics, and user-facing 
 
 ## Required workflow
 
-1. Run `./bin/lab doctor` before a new test session.
-2. Run `./bin/lab fast` for the complete repository suite inside a disposable guest. Never run `./test/all` directly on the Omarchy host.
-3. Run `./bin/lab prepare` once when no reusable base image exists.
-4. Run `./bin/lab plugin` for the focused, mandatory plugin lifecycle proof.
-5. Run `./bin/lab plugin <host-test>` for a feature-specific plugin scenario.
-6. Use `./bin/lab accept` only for the broad desktop regression suite. Its ISO and source checkout must be from compatible revisions.
-7. Treat the timestamped result directory printed by the harness as the evidence source. Never claim real-session acceptance from host tests or screenshots alone.
-8. Treat install/update/rescan success as file-state evidence, not runtime proof. For hot-loaded plugins, assert the loaded build identity and behavior of every independently loaded entry point, then inspect post-reload logs.
-9. Treat every user-facing claim as a contract. Prove it through the public interaction a user actually performs and an observable outcome, not through an internal function or substitute path.
-10. Trace an interaction through its host-owned event route before implementing it. A handler is not a feature unless the mounted runtime can deliver the event to it.
-11. Do not ship hidden product states. Every state needs a discoverable control, meaningful feedback, deterministic recovery, and end-to-end coverage; otherwise simplify the state model.
+1. Run `./bin/lab setup` when the source, ISO, or package dependencies are absent.
+2. Run `./bin/lab doctor` before a new test session.
+3. Run `./bin/lab fast` for the complete repository suite inside a disposable guest. Never run `./test/all` directly on the Omarchy host.
+4. Run `./bin/lab prepare` once when no reusable base image exists.
+5. Run `./bin/lab plugin` for the focused, mandatory plugin lifecycle proof.
+6. Run `./bin/lab plugin <host-test>` for a feature-specific plugin scenario.
+7. Use `./bin/lab accept` only for the broad desktop regression suite. Its ISO and source checkout must be from compatible revisions.
+8. Treat the timestamped result directory printed by the harness as the evidence source. Never claim real-session acceptance from host tests or screenshots alone.
+9. Treat install/update/rescan success as file-state evidence, not runtime proof. For hot-loaded plugins, assert the loaded build identity and behavior of every independently loaded entry point, then inspect post-reload logs.
+10. Treat every user-facing claim as a contract. Prove it through the public interaction a user actually performs and an observable outcome, not through an internal function or substitute path.
+11. Trace an interaction through its host-owned event route before implementing it. A handler is not a feature unless the mounted runtime can deliver the event to it.
+12. Do not ship hidden product states. Every state needs a discoverable control, meaningful feedback, deterministic recovery, and end-to-end coverage; otherwise simplify the state model.
 
 The VM commands synchronize the complete source checkout, dev-link the disposable guest to it, and start a fresh graphical login so every user-session layer reads the checkout. `plugin` runs only the requested host-driven scenario. `accept` additionally runs hardware-level shortcut smoke tests and the broad in-guest Omarchy suite. A run overlay is disposable; the reusable installed base must remain unchanged.
 

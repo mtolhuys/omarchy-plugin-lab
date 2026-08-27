@@ -27,9 +27,23 @@ available as evidence.
 
 ## Start here
 
-By default, the lab expects sibling checkouts named `omarchy`, `omarchy-iso`,
-and `omarchy-pkgs`. If your layout differs, copy
-[`lab.env.example`](lab.env.example) to `.lab.env` and set absolute paths.
+Initialize the default sibling checkouts and download the current published ISO
+with its checksum:
+
+```bash
+./bin/lab setup
+```
+
+Setup clones the public Omarchy, ISO, and package repositories, applies the
+versioned lab integration to the ISO test harness, and downloads roughly 6 GiB
+for the ISO. Existing checkouts and ISOs are preserved. Use `--no-iso` to skip
+the large download. Setup does not install host packages, build an ISO, create a
+VM, or change the running desktop.
+
+By default, these repositories are siblings named `omarchy`, `omarchy-iso`, and
+`omarchy-pkgs`. If your layout differs, copy
+[`lab.env.example`](lab.env.example) to `.lab.env` and set absolute paths before
+running setup.
 
 Check that the selected source checkout, ISO harness, KVM, and dependencies are
 ready:

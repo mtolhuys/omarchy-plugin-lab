@@ -1,0 +1,172 @@
+diff --git i/bin/omarchy-iso-test w/bin/omarchy-iso-test
+index 281cf56..0cb05b6 100755
+--- i/bin/omarchy-iso-test
++++ w/bin/omarchy-iso-test
+@@ -21,6 +21,12 @@
+ #   --sync-omarchy DIR Push DIR's test/acceptance into the guest before running
+ #                      (defaults to OMARCHY_PATH when the suite is present)
+ #   --sync-all DIR     Push all of DIR (bin/config/shell/test) into the guest
++#   --dev-link         With --sync-all, start a fresh graphical session linked
++#                      to the checkout so the whole desktop uses local source
++#   --host-test FILE   Source FILE after boot; it must define omarchy_host_test
++#                      and may use the harness QMP/SSH/artifact helpers
++#   --host-test-only   Run only --host-test after source activation, skipping
++#                      the broad desktop and in-guest acceptance suites
+ #   --port PORT        Host port forwarded to guest SSH (default 2222)
+ #   --memory MB        VM memory (default 8192)
+ #   --timeout SECS     Install timeout (default 2400)
+@@ -45,6 +51,9 @@ KEEP_RUNNING=false
+ NO_PREVIEW=false
+ SYNC_DIR=""
+ SYNC_ALL=false
++DEV_LINK=false
++HOST_TEST=""
++HOST_TEST_ONLY=false
+ 
+ GUEST_USER="omarchy"
+ GUEST_PASSWORD="omarchy"
+@@ -60,6 +69,9 @@ while (($#)); do
+     --no-preview) NO_PREVIEW=true ;;
+     --sync-omarchy) SYNC_DIR="$2"; shift ;;
+     --sync-all) SYNC_DIR="$2"; SYNC_ALL=true; shift ;;
++    --dev-link) DEV_LINK=true ;;
++    --host-test) HOST_TEST="$2"; shift ;;
++    --host-test-only) HOST_TEST_ONLY=true ;;
+     --port) SSH_PORT="$2"; shift ;;
+     --memory) MEMORY="$2"; shift ;;
+     --timeout) INSTALL_TIMEOUT="$2"; shift ;;
+@@ -69,6 +81,23 @@ while (($#)); do
+   shift
+ done
+ 
++if $DEV_LINK && ! $SYNC_ALL; then
++  echo "--dev-link requires --sync-all DIR" >&2
++  exit 1
++fi
++
++if [[ -n $HOST_TEST ]]; then
++  HOST_TEST=$(realpath -e "$HOST_TEST") || {
++    echo "Host test not found: $HOST_TEST" >&2
++    exit 1
++  }
++fi
++
++if $HOST_TEST_ONLY && [[ -z $HOST_TEST ]]; then
++  echo "--host-test-only requires --host-test FILE" >&2
++  exit 1
++fi
++
+ if [[ -z $SYNC_DIR && -f ${OMARCHY_PATH:-}/test/acceptance ]]; then
+   SYNC_DIR="$OMARCHY_PATH"
+ fi
+@@ -355,7 +384,10 @@ wait_for_ssh() {
+ }
+ 
+ session_started() {
+-  ssh_guest "ls /run/user/1000/hypr 2>/dev/null | grep -q ." 2>/dev/null
++  # Hyprland leaves its runtime directory behind briefly after logout, while
++  # SDDM starts a different compositor as the sddm user. Only the compositor
++  # owned by the test user proves that the Omarchy session is actually ready.
++  ssh_guest "pgrep -u \$(id -u) -x Hyprland >/dev/null" 2>/dev/null
+ }
+ 
+ ssh_session() {
+@@ -367,7 +399,8 @@ ssh_session() {
+     export LANG=\${LANG:-C.UTF-8}; \
+     export HYPRLAND_INSTANCE_SIGNATURE=\$(ls -t \$XDG_RUNTIME_DIR/hypr | head -1); \
+     export WAYLAND_DISPLAY=\$(find \$XDG_RUNTIME_DIR -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f\\n' | head -1); \
+-    export OMARCHY_PATH=/usr/share/omarchy; \
++    [[ ! -f /etc/omarchy.conf ]] || source /etc/omarchy.conf; \
++    export OMARCHY_PATH=\${OMARCHY_PATH:-/usr/share/omarchy}; \
+     export PATH=\$OMARCHY_PATH/bin:\$PATH; \
+     $command" </dev/null
+ }
+@@ -399,6 +432,10 @@ guest_layer_absent() {
+   ! guest_layer_present "$1"
+ }
+ 
++session_stopped() {
++  ! session_started
++}
++
+ cleanup_shortcut_state() {
+   ssh_session 'for plugin in omarchy.launcher omarchy.menu omarchy.emojis omarchy.clipboard omarchy.audio; do
+     omarchy-shell shell hide "$plugin" >/dev/null 2>&1 || true
+@@ -1063,6 +1106,49 @@ sync_omarchy() {
+   fi
+ }
+ 
++activate_dev_checkout() {
++  $DEV_LINK || return 0
++
++  local target=".local/share/omarchy"
++  log "Linking the disposable guest session to the synced Omarchy checkout"
++
++  ssh_guest "echo '$GUEST_PASSWORD' | sudo -S -v && $target/bin/omarchy-dev-link $target --no-reboot"
++
++  # omarchy-dev-link deliberately leaves the running UWSM environment alone.
++  # A fresh graphical login is enough to rebuild that environment from
++  # /etc/omarchy.conf. Avoid rebooting here: the acceptance disk is already a
++  # throwaway overlay, and some released unencrypted ISOs have a separate
++  # post-install Limine/resume defect that would obscure source-level tests.
++  ssh_guest "uwsm stop" >/dev/null 2>&1 || true
++
++  if ! wait_for_guest_state "linked graphical session stops" 60 session_stopped; then
++    return 1
++  fi
++
++  establish_session
++  ssh_guest "grep -Fq '$target' /etc/omarchy.conf"
++  log "Disposable guest is running entirely from the synced checkout"
++}
++
++run_host_test() {
++  [[ -n $HOST_TEST ]] || return 0
++
++  log "Running host-driven acceptance: $HOST_TEST"
++  # The host test is trusted local test code sourced deliberately so it can use
++  # press, ssh_guest, ssh_session, capture_console, wait_for_guest_state, and
++  # the current RUN_DIR without duplicating the QMP/SSH harness.
++  source "$HOST_TEST"
++  declare -F omarchy_host_test >/dev/null || {
++    echo "$HOST_TEST must define omarchy_host_test()" >&2
++    return 1
++  }
++  set +e
++  omarchy_host_test 2>&1 | tee "$RUN_DIR/host-test.log"
++  local status=${PIPESTATUS[0]}
++  set -e
++  return "$status"
++}
++
+ acceptance_phase() {
+   log "Booting acceptance VM from base image overlay"
+ 
+@@ -1074,15 +1160,22 @@ acceptance_phase() {
+ 
+   establish_session
+   sync_omarchy
++  activate_dev_checkout
+ 
+   local status=0
+-  shortcut_smoke_phase || status=1
+ 
+-  log "Running acceptance suite"
+-  ssh_guest "OMARCHY_PATH=$guest_omarchy_path OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance bash .local/share/omarchy/test/acceptance" || status=$?
++  if $HOST_TEST_ONLY; then
++    run_host_test || status=1
++  else
++    shortcut_smoke_phase || status=1
++    run_host_test || status=1
+ 
+-  log "Collecting artifacts into $RUN_DIR"
+-  ssh_guest "tar -C /tmp -cf - omarchy-acceptance 2>/dev/null" | tar -C "$RUN_DIR" -xf - || true
++    log "Running acceptance suite"
++    ssh_guest "OMARCHY_PATH=$guest_omarchy_path OMARCHY_ACCEPTANCE_DIR=/tmp/omarchy-acceptance bash .local/share/omarchy/test/acceptance" || status=$?
++
++    log "Collecting artifacts into $RUN_DIR"
++    ssh_guest "tar -C /tmp -cf - omarchy-acceptance 2>/dev/null" | tar -C "$RUN_DIR" -xf - || true
++  fi
+   ssh_guest "echo $GUEST_PASSWORD | sudo -S cat /var/log/omarchy-install.log 2>/dev/null" >"$RUN_DIR/omarchy-install.log" 2>/dev/null || true
+   if ((status == 0)); then
+     capture_console "success-acceptance-final"

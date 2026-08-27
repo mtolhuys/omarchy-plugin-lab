@@ -9,7 +9,16 @@ WORKSPACE_ROOT=$(cd -- "$LAB_ROOT/.." && pwd)
 SOURCE_ROOT="${OMARCHY_LAB_SOURCE:-$WORKSPACE_ROOT/omarchy}"
 ISO_ROOT="${OMARCHY_LAB_ISO_ROOT:-$WORKSPACE_ROOT/omarchy-iso}"
 PKGS_ROOT="${OMARCHY_LAB_PKGS_ROOT:-$WORKSPACE_ROOT/omarchy-pkgs}"
-ISO="${OMARCHY_LAB_ISO:-$ISO_ROOT/release/omarchy.iso}"
+SOURCE_URL="${OMARCHY_LAB_SOURCE_URL:-https://github.com/basecamp/omarchy.git}"
+ISO_URL="${OMARCHY_LAB_ISO_URL:-https://github.com/omacom-io/omarchy-iso.git}"
+PKGS_URL="${OMARCHY_LAB_PKGS_URL:-https://github.com/omacom-io/omarchy-pkgs.git}"
+HARNESS_PATCH="$LAB_ROOT/patches/omarchy-iso-test.patch"
+DEFAULT_ISO="$ISO_ROOT/release/omarchy.iso"
+if [[ -z ${OMARCHY_LAB_ISO:-} && ! -f $DEFAULT_ISO ]]; then
+  DEFAULT_ISO=$(find "$ISO_ROOT/release" -maxdepth 1 -type f -name 'omarchy-*.iso' \
+    -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)
+fi
+ISO="${OMARCHY_LAB_ISO:-${DEFAULT_ISO:-$ISO_ROOT/release/omarchy.iso}}"
 MEMORY="${OMARCHY_LAB_MEMORY:-5120}"
 SSH_PORT="${OMARCHY_LAB_SSH_PORT:-2222}"
 
@@ -48,6 +57,108 @@ tracked_personal_paths() {
   git -C "$LAB_ROOT" grep -I -n -E "$pattern" -- .
 }
 
+clone_checkout() {
+  local label=$1 url=$2 branch=$3 destination=$4
+
+  if [[ -e $destination ]]; then
+    [[ -d $destination/.git || -f $destination/.git ]] ||
+      fail "$label destination exists but is not a Git checkout: $destination"
+    echo "keep - $label checkout already exists: $destination"
+    return
+  fi
+
+  mkdir -p "$(dirname "$destination")"
+  echo "clone - $label: $url"
+  git clone --branch "$branch" --single-branch "$url" "$destination"
+}
+
+harness_supports_lab() {
+  local harness=$1
+  grep -Eq -- '^[[:space:]]*--dev-link\)' "$harness" &&
+    grep -Eq -- '^[[:space:]]*--host-test\)' "$harness" &&
+    grep -Eq -- '^[[:space:]]*--host-test-only\)' "$harness"
+}
+
+ensure_harness_extensions() {
+  local harness="$ISO_ROOT/bin/omarchy-iso-test"
+
+  [[ -f $HARNESS_PATCH ]] || fail "Lab harness patch is missing: $HARNESS_PATCH"
+  [[ -f $harness ]] || fail "ISO test harness is missing: $harness"
+  if harness_supports_lab "$harness"; then
+    echo 'keep - ISO harness already provides the plugin-lab extensions'
+    return
+  fi
+
+  git -C "$ISO_ROOT" diff --quiet && git -C "$ISO_ROOT" diff --cached --quiet ||
+    fail "ISO checkout has local changes; refusing to apply the lab harness patch"
+  git -C "$ISO_ROOT" apply --check "$HARNESS_PATCH" ||
+    fail "The lab harness patch is incompatible with this ISO checkout"
+  git -C "$ISO_ROOT" apply "$HARNESS_PATCH"
+  echo 'ok - applied the versioned plugin-lab extensions to the ISO harness'
+}
+
+download_published_iso() {
+  local page iso_url filename target checksum_tmp expected actual
+
+  if [[ -f $ISO ]]; then
+    [[ -f $ISO.sha256 ]] || fail "Existing ISO has no checksum sidecar: $ISO"
+    (cd "$(dirname "$ISO")" && sha256sum -c "$(basename "$ISO").sha256") ||
+      fail 'Existing ISO checksum does not match'
+    echo "keep - ISO already exists: $ISO"
+    return
+  fi
+
+  page=$(curl -fsSL https://omarchy.org) || fail 'Could not read the Omarchy download page'
+  iso_url=$(grep -Eo 'https://iso\.omarchy\.org/omarchy-[^"[:space:]]+\.iso' <<<"$page" | head -1 || true)
+  [[ -n $iso_url ]] || fail 'Could not discover the published Omarchy ISO URL'
+  filename=${iso_url##*/}
+  target="$ISO_ROOT/release/$filename"
+  mkdir -p "$ISO_ROOT/release"
+
+  echo "download - $iso_url"
+  curl -fL --continue-at - --output "$target.part" "$iso_url"
+  checksum_tmp=$(mktemp "$ISO_ROOT/release/.${filename}.sha256.XXXXXX")
+  if ! curl -fsSL --output "$checksum_tmp" "$iso_url.sha256"; then
+    rm -f "$checksum_tmp"
+    fail 'Could not download the ISO checksum'
+  fi
+  expected=$(awk 'NR == 1 { print $1 }' "$checksum_tmp")
+  actual=$(sha256sum "$target.part" | awk '{ print $1 }')
+  [[ $expected =~ ^[[:xdigit:]]{64}$ && $actual == "$expected" ]] ||
+    fail 'Downloaded ISO checksum does not match'
+  mv "$target.part" "$target"
+  mv "$checksum_tmp" "$target.sha256"
+  ISO=$target
+  echo "ok - verified published ISO: $ISO"
+}
+
+setup_lab() {
+  local download_iso=true
+
+  if [[ ${1:-} == "--no-iso" ]]; then
+    download_iso=false
+    shift
+  fi
+  (( $# == 0 )) || fail 'Usage: lab setup [--no-iso]'
+
+  command -v git >/dev/null || fail 'Required command is missing: git'
+  command -v curl >/dev/null || fail 'Required command is missing: curl'
+  command -v sha256sum >/dev/null || fail 'Required command is missing: sha256sum'
+
+  clone_checkout 'Omarchy source' "$SOURCE_URL" quattro "$SOURCE_ROOT"
+  clone_checkout 'Omarchy ISO' "$ISO_URL" quattro "$ISO_ROOT"
+  clone_checkout 'Omarchy packages' "$PKGS_URL" master "$PKGS_ROOT"
+  ensure_harness_extensions
+  if $download_iso; then
+    download_published_iso
+  else
+    echo 'skip - published ISO download'
+  fi
+
+  printf '\nSetup complete. Next run:\n  ./bin/lab doctor\n'
+  $download_iso && printf '  ./bin/lab prepare\n'
+}
+
 doctor() {
   local failed=0 cmd
 
@@ -63,8 +174,7 @@ doctor() {
   [[ -c /dev/kvm && -r /dev/kvm && -w /dev/kvm ]] || { echo 'not ok - /dev/kvm is unavailable'; failed=1; }
   [[ -d $SOURCE_ROOT/.git || -f $SOURCE_ROOT/.git ]] || { echo 'not ok - source checkout is missing'; failed=1; }
   [[ -x $ISO_ROOT/bin/omarchy-iso-test ]] || { echo 'not ok - ISO harness is missing'; failed=1; }
-  grep -Fq -- '--dev-link' "$ISO_ROOT/bin/omarchy-iso-test" || { echo 'not ok - ISO harness lacks the plugin-lab dev-link extension'; failed=1; }
-  grep -Fq -- '--host-test' "$ISO_ROOT/bin/omarchy-iso-test" || { echo 'not ok - ISO harness lacks the plugin-lab host-test extension'; failed=1; }
+  harness_supports_lab "$ISO_ROOT/bin/omarchy-iso-test" || { echo 'not ok - ISO harness lacks the plugin-lab extensions'; failed=1; }
   [[ -f $ISO ]] || { echo 'not ok - verified Omarchy ISO is missing'; failed=1; }
 
   for cmd in qemu-system-x86_64 qemu-img socat magick tesseract ssh tar jq git; do
@@ -227,6 +337,7 @@ usage() {
 Usage: ./bin/lab <command>
 
 Commands:
+  setup [--no-iso]           Clone dependencies and fetch a verified ISO
   doctor                     Verify host isolation, dependencies, and ISO
   status                     Show lab readiness and reusable base details
   fast [test-files...]       Run all or selected source tests in a fresh VM
@@ -245,6 +356,7 @@ command="${1:-}"
 (( $# > 0 )) && shift
 
 case "$command" in
+  setup) setup_lab "$@" ;;
   doctor) doctor "$@" ;;
   status) status "$@" ;;
   fast) fast "$@" ;;
