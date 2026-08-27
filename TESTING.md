@@ -12,6 +12,22 @@
 
 Een wijziging is pas klaar wanneer de laag waarop hij ingrijpt groen is. Manifest- of lifecyclewerk vereist minimaal `fast` plus `plugin`. Nieuwe globale keybindings vereisen daarnaast een scenario dat de toets met `press` via QMP verstuurt. Wijzigingen aan systemd, `/etc`, installer of package-inhoud vereisen een lokale ISO.
 
+## Productcontract als releasepoort
+
+Maak vóór de acceptatieronde een kleine inventaris van wat het product publiek belooft: zichtbare bediening, CLI, status, documentatie en lifecycle. Voor iedere belofte moet duidelijk zijn:
+
+- welke publieke handeling de gebruiker uitvoert;
+- welke waarneembare uitkomst het succes bewijst;
+- welke runtimegrens de handeling passeert;
+- welke fout-, annulerings- en opruimpaden relevant zijn;
+- welke beperking bewust buiten de claim valt.
+
+Test de volledige route van gebruikershandeling tot uitkomst. Een directe functieaanroep, IPC-opdracht of synthetische fixture bewijst alleen de laag die zij daadwerkelijk passeert. Gebruik representatieve echte clients wanneer gedrag van een toolkit, compositor of protocol afhangt; voeg niet willekeurig meer varianten toe wanneer ze geen nieuwe grens afdekken.
+
+Publieke toestand moet bedienbaar, zichtbaar en herstelbaar zijn. Een toestand zonder bereikbare bediening of betekenisvolle feedback is geen af productgedrag, ook niet wanneer het interne model en de unit-tests kloppen. Vereenvoudig zulke toestand voordat er documentatie en regressies omheen groeien.
+
+Voer de laatste acceptatie uit op één schoon, gecommit kandidaat. Vergelijk bronrevisie, geïnstalleerde revisie en geladen runtime-identiteiten, en controleer daarna opnieuw dat README, manifest, CLI en status uitsluitend gedrag beschrijven dat in diezelfde kandidaat is bewezen.
+
 ## Wat de standaard pluginproef controleert
 
 `host-tests/plugin-lifecycle.sh` maakt binnen de wegwerp-VM een lokale gitrepository van `fixtures/lifecycle-plugin` en controleert vervolgens:
