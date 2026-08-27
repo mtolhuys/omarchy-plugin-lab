@@ -68,30 +68,30 @@ omarchy_host_test() {
      omarchy-plugin-list --json | jq -e 'any(.[]; .id == \"dev.omarchy.onscreen-keyboard\" and .enabled == true)' && \
      omarchy-plugin-list --json | jq -e 'all(.[]; .id != \"dev.omarchy.tablet-mode\")' && \
      ! omarchy-shell tablet-mode status >/dev/null 2>&1 && \
-     omarchy-shell onscreen-keyboard status | jq -e --arg build '$expected_version' '.runtimeBuild == \$build and .widgetBuild == \$build and .mode == \"auto\" and .visible == false and .layout == \"en-us\" and .detector.source == \"hyprland-devices\"'" || return 1
+     omarchy-shell onscreen-keyboard status | jq -e --arg build '$expected_version' '.runtimeBuild == \$build and .widgetBuild == \$build and .visible == false and .layout == \"en-us\" and .detector.source == \"hyprland-devices\" and (has(\"mode\") | not) and (has(\"policyLabel\") | not) and (has(\"keyboardEnabled\") | not)'" || return 1
   ssh_session "test \"\$(git -C \"\$HOME/.config/omarchy/plugins/dev.omarchy.onscreen-keyboard\" rev-parse HEAD)\" = \
     \"\$(git -C ${remote_plugin_dir} rev-parse HEAD)\" && \
     ONSCREEN_KEYBOARD_PLUGIN_ROOT=${remote_plugin_dir} ${remote_fixture_dir}/verify-live-update" || return 1
 
-  log "Proving Auto follows live attach, detach and reattach inventory transitions"
+  log "Proving live attach, detach and reattach inventory transitions"
   ssh_session "printf '%s\n' '{\"switches\":[{\"name\":\"Asus WMI hotkeys\"}],\"keyboards\":[{\"name\":\"at-translated-set-2-keyboard\"}]}' \
     > /tmp/omarchy-onscreen-keyboard-detector-devices.json" || return 1
-  wait_for_guest_state "Auto shows after the typing keyboard detaches" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"auto\" and .detector.active == true and .visible == true' && \
+  wait_for_guest_state "keyboard shows after the typing keyboard detaches" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.detector.active == true and .visible == true' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | length == 1'" || return 1
   ssh_session "printf '%s\n' '{\"switches\":[{\"name\":\"Asus WMI hotkeys\"}],\"keyboards\":[{\"name\":\"at-translated-set-2-keyboard\"},{\"name\":\"asustek-computer-inc.-n-key-device\"}]}' \
     > /tmp/omarchy-onscreen-keyboard-detector-devices.json" || return 1
-  wait_for_guest_state "Auto hides after the typing keyboard reattaches" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"auto\" and .detector.active == false and .visible == false' && \
+  wait_for_guest_state "keyboard hides after the typing keyboard reattaches" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.detector.active == false and .visible == false' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | length == 0'" || return 1
 
-  log "Proving forced On remains distinct from Auto"
-  ssh_session "omarchy-shell onscreen-keyboard mode on | grep -qx ok" || return 1
-  wait_for_guest_state "forced On shows regardless of detector state" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"on\" and .policyLabel == \"ON · FORCED\" and .visible == true'" || return 1
-  ssh_session "omarchy-shell onscreen-keyboard mode auto | grep -qx ok" || return 1
-  wait_for_guest_state "Auto returns to the inactive VM detector" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"auto\" and (.policyLabel | startswith(\"AUTO · \")) and .visible == false'" || return 1
+  log "Proving direct show and hide have no hidden state"
+  ssh_session "omarchy-shell onscreen-keyboard show | grep -qx ok" || return 1
+  wait_for_guest_state "direct show reveals the keyboard" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == true and (has(\"mode\") | not)'" || return 1
+  ssh_session "omarchy-shell onscreen-keyboard hide | grep -qx ok" || return 1
+  wait_for_guest_state "direct hide conceals the keyboard" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == false and (has(\"mode\") | not)'" || return 1
 
   ssh_session "rm -f /tmp/onscreen-keyboard-input.hex /tmp/onscreen-keyboard-target.log; \
     omarchy-launch-tui --app-id=onscreen-keyboard-test \
@@ -117,10 +117,10 @@ omarchy_host_test() {
   wait_for_guest_state "controlled target enters fullscreen" 10 ssh_session \
     "hyprctl -j activewindow | jq -e '.fullscreen > 0'" || return 1
 
-  log "Forcing the on-screen keyboard through public IPC"
-  ssh_session "omarchy-shell onscreen-keyboard mode on | grep -qx ok" || return 1
-  wait_for_guest_state "keyboard layer appears in forced-on mode" 15 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"on\" and .policyLabel == \"ON · FORCED\" and .keyboardEnabled == true and .visible == true' && \
+  log "Showing the on-screen keyboard through public IPC"
+  ssh_session "omarchy-shell onscreen-keyboard show | grep -qx ok" || return 1
+  wait_for_guest_state "keyboard layer appears after direct show" 15 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == true' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | length == 1' && \
      hyprctl -j activewindow | jq -e '.fullscreen == 0'" || return 1
   ssh_session "test \"\$(hyprctl -j activewindow | jq -r '.address')\" = '$target_address'" || return 1
@@ -130,7 +130,7 @@ omarchy_host_test() {
   # layer-surface pointer path; each tap is followed by a bounded pause so the
   # deliberately single-flight wtype backend has completed before the next.
   tap_at() {
-    local width="$1" height="$2" x="$3" y="$4" pause="${5:-0.4}" qx qy response
+    local width="$1" height="$2" x="$3" y="$4" pause="${5:-0.4}" button="${6:-left}" qx qy response
     qx=$((x * 32767 / (width - 1)))
     qy=$((y * 32767 / (height - 1)))
     response=$(qmp "\"input-send-event\", \"arguments\": {\"events\": [
@@ -143,7 +143,7 @@ omarchy_host_test() {
     fi
     sleep 0.1
     response=$(qmp "\"input-send-event\", \"arguments\": {\"events\": [
-      {\"type\":\"btn\",\"data\":{\"down\":true,\"button\":\"left\"}}
+      {\"type\":\"btn\",\"data\":{\"down\":true,\"button\":\"$button\"}}
     ]}")
     if grep -q '"error"' <<<"$response"; then
       printf 'QMP pointer press failed: %s\n' "$response" >&2
@@ -151,7 +151,7 @@ omarchy_host_test() {
     fi
     sleep 0.12
     response=$(qmp "\"input-send-event\", \"arguments\": {\"events\": [
-      {\"type\":\"btn\",\"data\":{\"down\":false,\"button\":\"left\"}}
+      {\"type\":\"btn\",\"data\":{\"down\":false,\"button\":\"$button\"}}
     ]}")
     if grep -q '"error"' <<<"$response"; then
       printf 'QMP pointer release failed: %s\n' "$response" >&2
@@ -205,14 +205,17 @@ omarchy_host_test() {
   log "Toggling through the real bar hit target"
   ssh_session "omarchy-shell onscreen-keyboard hide >/dev/null" || return 1
   wait_for_guest_state "keyboard is hidden before bar toggle" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"off\" and .policyLabel == \"OFF\" and .visible == false' && \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == false' && \
      hyprctl -j activewindow | jq -e '.fullscreen > 0'" || return 1
   ssh_session "hyprctl eval 'hl.dispatch(hl.dsp.window.fullscreen({ action = \"unset\" }))' >/dev/null" || return 1
   wait_for_guest_state "bar is exposed for pointer toggle" 10 ssh_session \
     "hyprctl -j activewindow | jq -e '.fullscreen == 0'" || return 1
+  tap_at 1280 800 1179 13 0.4 right || return 1
+  wait_for_guest_state "right-click has no hidden mode behavior" 5 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == false and (has(\"mode\") | not)'" || return 1
   tap_at 1280 800 1179 13 || return 1
   wait_for_guest_state "bar click shows the keyboard" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"on\" and .policyLabel == \"ON · FORCED\" and .visible == true' && \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == true' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | length == 1'" || return 1
   wait_for_guest_state "measured seam correction activates for the workspace override" 10 ssh_session \
     "omarchy-shell onscreen-keyboard status | jq -e '.seamCorrection > 0'" || return 1
@@ -279,18 +282,18 @@ omarchy_host_test() {
     "test \"\$(hyprctl -j activewindow | jq -r '.address')\" = '$target_address' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-image-selector\")] | length == 0'" || return 1
 
-  log "Proving the bar is the sole touch control and restores Auto when detached"
+  log "Proving the bar is the sole touch control while detached"
   ssh_session "printf '%s\n' '{\"switches\":[{\"name\":\"Asus WMI hotkeys\"}],\"keyboards\":[{\"name\":\"at-translated-set-2-keyboard\"}]}' \
     > /tmp/omarchy-onscreen-keyboard-detector-devices.json" || return 1
-  wait_for_guest_state "forced On stays visible after detector reports detach" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"on\" and .detector.active == true and .visible == true'" || return 1
+  wait_for_guest_state "keyboard stays visible after detector reports detach" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.detector.active == true and .visible == true'" || return 1
   tap_at 1280 800 1179 13 || return 1
   wait_for_guest_state "bright bar icon dismisses the keyboard" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"off\" and .visible == false'" || return 1
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == false'" || return 1
   capture_console "success-onscreen-keyboard-02c-dismissed-1280x800"
   tap_at 1280 800 1179 13 || return 1
-  wait_for_guest_state "dim bar icon restores detector-driven Auto while detached" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"auto\" and .detector.active == true and .visible == true'" || return 1
+  wait_for_guest_state "dim bar icon shows the keyboard while detached" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.detector.active == true and .visible == true'" || return 1
 
   log "Typing representative printable, modifier, navigation and control keys"
   tap_at 1280 800 123 659 || return 1      # a
@@ -445,7 +448,7 @@ omarchy_host_test() {
 
   ssh_session "omarchy-shell onscreen-keyboard hide | grep -qx ok" || return 1
   wait_for_guest_state "hide removes the keyboard layer" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"off\" and .visible == false' && \
+    "omarchy-shell onscreen-keyboard status | jq -e '.visible == false' && \
      hyprctl -j layers | jq -e '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | length == 0'" || return 1
 
   log "Checking the 1920x1200 reference 16:10 viewport"
@@ -464,15 +467,15 @@ omarchy_host_test() {
   tap_at 1920 1200 445 1112 || return 1
   ssh_session "printf '%s\n' '{\"switches\":[{\"name\":\"Asus WMI hotkeys\"}],\"keyboards\":[{\"name\":\"at-translated-set-2-keyboard\"},{\"name\":\"asustek-computer-inc.-n-key-device\"}]}' \
       > /tmp/omarchy-onscreen-keyboard-detector-devices.json; \
-    omarchy-shell onscreen-keyboard hide >/dev/null; omarchy-shell onscreen-keyboard mode auto >/dev/null" || return 1
-  wait_for_guest_state "Auto is hidden again after the typing keyboard reattaches" 10 ssh_session \
-    "omarchy-shell onscreen-keyboard status | jq -e '.mode == \"auto\" and .detector.active == false and .visible == false'" || return 1
+    omarchy-shell onscreen-keyboard hide >/dev/null" || return 1
+  wait_for_guest_state "keyboard is hidden again after the typing keyboard reattaches" 10 ssh_session \
+    "omarchy-shell onscreen-keyboard status | jq -e '.detector.active == false and .visible == false'" || return 1
 
   log "Checking the Z13 fractional-scale geometry regression"
   ssh_session 'monitor=$(hyprctl -j monitors | jq -r ".[0].name"); hyprctl eval "hl.monitor({ output = \"$monitor\", mode = \"1920x1200@60\", position = \"0x0\", scale = 1.6 })" >/dev/null' || return 1
   wait_for_guest_state "1.6 fractional monitor scale is active" 15 ssh_session \
     "hyprctl -j monitors | jq -e '.[0].scale == 1.6'" || return 1
-  ssh_session "omarchy-shell onscreen-keyboard mode on >/dev/null" || return 1
+  ssh_session "omarchy-shell onscreen-keyboard show >/dev/null" || return 1
   wait_for_guest_state "scaled keyboard layer and client edges converge" 15 ssh_session \
     "client_bottom=\$(hyprctl -j activewindow | jq '.at[1] + .size[1]'); \
      keyboard_top=\$(hyprctl -j layers | jq '[.. | objects | select(.namespace? == \"omarchy-onscreen-keyboard\")] | first | (.y // .geometry[1])'); \
@@ -498,7 +501,7 @@ omarchy_host_test() {
     omarchy-plugin-list --json | jq -e 'any(.[]; .id == \"dev.omarchy.onscreen-keyboard\" and .enabled == false)'" || return 1
   ssh_session "omarchy-plugin-enable dev.omarchy.onscreen-keyboard" || return 1
   wait_for_guest_state "plugin re-enables after rescan" 15 ssh_session \
-    "omarchy-shell onscreen-keyboard mode on >/dev/null && \
+    "omarchy-shell onscreen-keyboard show >/dev/null && \
      omarchy-shell onscreen-keyboard status | jq -e '.visible == true'" || return 1
   ssh_session "omarchy-plugin-disable dev.omarchy.onscreen-keyboard; omarchy-plugin-remove dev.omarchy.onscreen-keyboard --yes" || return 1
   wait_for_guest_state "removal leaves no plugin config, process or layer residue" 20 ssh_session \

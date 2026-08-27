@@ -26,7 +26,9 @@ test -n "$STATUS"
 jq -e --arg build "$EXPECTED" '
   .runtimeBuild == $build and
   .widgetBuild == $build and
-  (.keyboardEnabled | type) == "boolean" and
+  (has("mode") | not) and
+  (has("policyLabel") | not) and
+  (has("keyboardEnabled") | not) and
   (.windowAdjusted | type) == "boolean" and
   .layout == "en-us"
 ' <<<"$STATUS" >/dev/null
