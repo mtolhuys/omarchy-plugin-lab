@@ -12,6 +12,9 @@ This directory is the safe execution boundary for Omarchy plugin and native desk
 6. Use `./bin/lab accept` only for the broad desktop regression suite. Its ISO and source checkout must be from compatible revisions.
 7. Treat the timestamped result directory printed by the harness as the evidence source. Never claim real-session acceptance from host tests or screenshots alone.
 8. Treat install/update/rescan success as file-state evidence, not runtime proof. For hot-loaded plugins, assert the loaded build identity and behavior of every independently loaded entry point, then inspect post-reload logs.
+9. Treat every user-facing claim as a contract. Prove it through the public interaction a user actually performs and an observable outcome, not through an internal function or substitute path.
+10. Trace an interaction through its host-owned event route before implementing it. A handler is not a feature unless the mounted runtime can deliver the event to it.
+11. Do not ship hidden product states. Every state needs a discoverable control, meaningful feedback, deterministic recovery, and end-to-end coverage; otherwise simplify the state model.
 
 The VM commands synchronize the complete source checkout, dev-link the disposable guest to it, and start a fresh graphical login so every user-session layer reads the checkout. `plugin` runs only the requested host-driven scenario. `accept` additionally runs hardware-level shortcut smoke tests and the broad in-guest Omarchy suite. A run overlay is disposable; the reusable installed base must remain unchanged.
 
@@ -37,6 +40,8 @@ the rendered control and assert the resulting public state. Calling its IPC or
 function directly proves the backend but not hit testing. Confirm the test
 precondition too: the control must not be covered by fullscreen content or
 another layer.
+
+Before calling a candidate complete, audit its README, manifest, CLI, visible labels, and status output against the tested public surface. Remove claims and concepts that have no corresponding user path. Test the exact committed candidate that will be shared; do not transfer conclusions from an earlier revision or a dirty checkout.
 
 ## Repositories
 
