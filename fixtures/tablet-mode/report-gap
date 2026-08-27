@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if [[ ${1:-} == --wait-visible ]]; then
+  for ((attempt = 0; attempt < 300; attempt++)); do
+    if omarchy-shell tablet-mode status | jq -e '.visible == true' >/dev/null 2>&1; then
+      # Let the layer's exclusive zone and the target window settle before
+      # measuring the compositor geometry.
+      sleep 0.5
+      break
+    fi
+    sleep 0.1
+  done
+  omarchy-shell tablet-mode status | jq -e '.visible == true' >/dev/null || {
+    printf 'Timed out waiting for the tablet keyboard to become visible.\n' >&2
+    exit 1
+  }
+elif [[ $# -gt 0 ]]; then
+  printf 'Usage: %s [--wait-visible]\n' "$0" >&2
+  exit 2
+fi
+
+status=$(omarchy-shell tablet-mode status)
+window=$(hyprctl -j activewindow)
+layers=$(hyprctl -j layers)
+monitors=$(hyprctl -j monitors)
+gaps=$(hyprctl -j getoption general:gaps_out)
+
+jq -n \
+  --argjson status "$status" \
+  --argjson window "$window" \
+  --argjson layers "$layers" \
+  --argjson monitors "$monitors" \
+  --argjson gaps "$gaps" '
+  {
+    plugin: ($status | {
+      runtimeBuild, widgetBuild, mode, visible, windowAdjusted, seamCorrection
+    }),
+    window: ($window | {
+      at, size, floating, fullscreen, monitor, workspace
+    }),
+    keyboard: ([
+      $layers | .. | objects |
+      select(.namespace? == "omarchy-tablet-keyboard") |
+      {x, y, w, h, geometry}
+    ][0] // null),
+    monitor: ([
+      $monitors[] | select(.focused == true) |
+      {id, name, x, y, width, height, scale, transform}
+    ][0] // null),
+    gaps: ($gaps | {int, float, css})
+  }'
