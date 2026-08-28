@@ -76,7 +76,8 @@ harness_supports_lab() {
   local harness=$1
   grep -Eq -- '^[[:space:]]*--dev-link\)' "$harness" &&
     grep -Eq -- '^[[:space:]]*--host-test\)' "$harness" &&
-    grep -Eq -- '^[[:space:]]*--host-test-only\)' "$harness"
+    grep -Eq -- '^[[:space:]]*--host-test-only\)' "$harness" &&
+    grep -Eq -- '^clear_startup_notifications\(\)' "$harness"
 }
 
 ensure_harness_extensions() {
