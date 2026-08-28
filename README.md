@@ -113,6 +113,11 @@ The harness provides:
 - `capture_console` for visual checkpoints saved beside the logs.
 - [`host-tests/helpers/pointer.sh`](host-tests/helpers/pointer.sh) and `qmp_pointer_tap` for visible pointer or touch controls.
 
+Before a supplied host test begins, the harness waits for the notification
+service, dismisses startup popups inherited from the reusable base, and verifies
+that the notification layer has closed. Notifications created by the test itself
+remain unaffected.
+
 Drive the same route a user will take. An IPC call proves a backend path, not
 hit testing. A successful rescan proves file state, not a hot-loaded runtime.
 Pair every meaningful action with an observable assertion.

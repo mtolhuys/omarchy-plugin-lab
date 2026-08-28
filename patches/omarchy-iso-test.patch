@@ -81,12 +81,22 @@ index 281cf56..0cb05b6 100755
      export PATH=\$OMARCHY_PATH/bin:\$PATH; \
      $command" </dev/null
  }
-@@ -399,6 +432,10 @@ guest_layer_absent() {
+@@ -399,6 +432,20 @@ guest_layer_absent() {
    ! guest_layer_present "$1"
  }
  
 +session_stopped() {
 +  ! session_started
++}
++
++clear_startup_notifications() {
++  [[ -n $HOST_TEST ]] || return 0
++
++  wait_for_guest_state "notification service is ready" 15 \
++    ssh_session "omarchy-shell notifications ping >/dev/null" || return 1
++  ssh_session "omarchy-shell notifications dismissAll >/dev/null" || return 1
++  wait_for_guest_state "startup notifications are dismissed" 15 \
++    guest_layer_absent "omarchy-notifications"
 +}
 +
  cleanup_shortcut_state() {
@@ -142,11 +152,15 @@ index 281cf56..0cb05b6 100755
  acceptance_phase() {
    log "Booting acceptance VM from base image overlay"
  
-@@ -1074,15 +1160,22 @@ acceptance_phase() {
+@@ -1074,15 +1160,26 @@ acceptance_phase() {
  
    establish_session
    sync_omarchy
 +  activate_dev_checkout
++  if ! clear_startup_notifications; then
++    capture_console "failure-startup-notifications"
++    return 1
++  fi
  
    local status=0
 -  shortcut_smoke_phase || status=1

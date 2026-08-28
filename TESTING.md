@@ -56,6 +56,10 @@ For an absolute pointer or touch tap, a scenario can source `host-tests/helpers/
 
 Every important user action needs a machine assertion. A screenshot is supporting evidence, not a substitute for state verification.
 
+The harness clears notification popups inherited from the reusable base before
+the product-owned scenario starts. This keeps visual checkpoints deterministic
+without silencing notifications that the scenario deliberately creates later.
+
 ## Hot reload and runtime identity
 
 A successful plugin add, update, rescan, or manifest validation proves only the state on disk. Quickshell may reject a new QML component while the old object remains visible, and Qt may cache components by URL. A scenario for a hot-loaded plugin must therefore:
