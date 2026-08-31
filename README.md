@@ -1,16 +1,28 @@
 # Omarchy Plugin Lab
 
-> A disposable KVM desktop for proving Omarchy plugins where they actually run.
+> Give coding agents a disposable Omarchy desktop—without giving up your own.
 
-![Omarchy Plugin Lab flow: source enters a disposable VM, real plugin behavior and input are exercised, and evidence is preserved.](assets/real-desktop-proof.gif)
+![An agent tests real plugin behavior and virtual input in a disposable Omarchy desktop while the user's daily session stays untouched.](assets/real-desktop-proof.gif)
 
-Omarchy Plugin Lab is a local environment for developing and testing Omarchy
-plugins, Hyprland integrations, Quickshell components, and native desktop
-behavior—without using the daily host installation as a test target.
+Omarchy Plugin Lab gives coding agents a separate desktop for developing and
+testing Omarchy plugins, Hyprland integrations, Quickshell components, and
+native desktop behavior. The agent gets a real graphical session it can safely
+exercise; the user keeps control of the daily desktop.
 
 It is built for the boundaries unit tests cannot settle: a fresh graphical
 login, a real compositor, global shortcuts, pointer input, shell lifecycle,
 hot reloads, and the artifacts needed to explain a result later.
+
+## One machine, two separate sessions
+
+The agent edits source and controls the harness from the host, but plugin code,
+desktop restarts, and user interaction run inside the disposable guest. Keyboard
+and pointer events go to the VM's virtual hardware—not to the user's active
+windows—and the result comes back as assertions, logs, and screenshots.
+
+That separation lets an agent test disruptive flows without stealing focus,
+typing into the wrong application, or reconfiguring the user's live shell. The
+guest can be discarded after every run while the evidence remains available.
 
 ## What it makes practical
 
