@@ -90,6 +90,31 @@ Show the artifacts from the latest run:
 ./bin/lab latest
 ```
 
+## Keep VM storage bounded
+
+Normal `fast`, `plugin`, and `accept` runs discard their copy-on-write VM disk
+after the guest has stopped. The timestamped run directory stays in place with
+its logs, screenshots, state dumps, and test reports, so the evidence remains
+useful without retaining a roughly 0.5–1.3 GiB disk after every run.
+
+Use `accept-keep` when you need a running guest for manual inspection. To keep a
+stopped overlay for later forensic work, pass the explicit override:
+
+```bash
+./bin/lab accept --keep-overlay
+```
+
+Preview how much space old throwaway overlays consume, then reclaim them:
+
+```bash
+./bin/lab clean --dry-run
+./bin/lab clean
+```
+
+Cleanup skips disks that belong to a running VM. It removes only per-run
+`run.qcow2` overlays; reusable base disks, ISO files, logs, screenshots, and
+other evidence are preserved.
+
 ## Write a scenario for the user journey
 
 Copy [`host-tests/example.sh`](host-tests/example.sh) into the plugin repository,
@@ -112,6 +137,11 @@ The harness provides:
 - `wait_for_guest_state` for bounded machine assertions.
 - `capture_console` for visual checkpoints saved beside the logs.
 - [`host-tests/helpers/pointer.sh`](host-tests/helpers/pointer.sh) and `qmp_pointer_tap` for visible pointer or touch controls.
+
+Before a supplied host test begins, the harness waits for the notification
+service, dismisses startup popups inherited from the reusable base, and verifies
+that the notification layer has closed. Notifications created by the test itself
+remain unaffected.
 
 Drive the same route a user will take. An IPC call proves a backend path, not
 hit testing. A successful rescan proves file state, not a hot-loaded runtime.

@@ -76,7 +76,10 @@ harness_supports_lab() {
   local harness=$1
   grep -Eq -- '^[[:space:]]*--dev-link\)' "$harness" &&
     grep -Eq -- '^[[:space:]]*--host-test\)' "$harness" &&
-    grep -Eq -- '^[[:space:]]*--host-test-only\)' "$harness"
+    grep -Eq -- '^[[:space:]]*--host-test-only\)' "$harness" &&
+    grep -Eq -- '^[[:space:]]*--discard-overlay\)' "$harness" &&
+    grep -Eq -- '^[[:space:]]*--keep-overlay\)' "$harness" &&
+    grep -Eq -- '^clear_startup_notifications\(\)' "$harness"
 }
 
 ensure_harness_extensions() {
@@ -265,6 +268,7 @@ accept() {
     --memory "$MEMORY" \
     --port "$SSH_PORT" \
     --no-preview \
+    --discard-overlay \
     "$@"
 }
 
@@ -300,9 +304,92 @@ shell_guest() {
 
 latest() {
   local run
-  run=$(find "$(base_dir)/runs" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+  run=$(find "$(base_dir)/runs" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null |
+    sort -nr | sed -n '1{s/^[^ ]* //;p;}')
   [[ -n $run ]] || fail "No lab runs found"
   printf '%s\n' "$run"
+}
+
+human_bytes() {
+  local bytes=$1
+  if command -v numfmt >/dev/null; then
+    numfmt --to=iec-i --suffix=B --format='%.1f' "$bytes"
+  else
+    printf '%s bytes\n' "$bytes"
+  fi
+}
+
+overlay_in_use() {
+  local overlay=$1 pidfile pid argument
+
+  if command -v fuser >/dev/null && fuser -s "$overlay" 2>/dev/null; then
+    return 0
+  fi
+
+  pidfile="$(dirname "$overlay")/qemu.pid"
+  [[ -r $pidfile ]] || return 1
+  read -r pid <"$pidfile" || return 1
+  [[ $pid =~ ^[0-9]+$ && -r /proc/$pid/cmdline ]] || return 1
+
+  while IFS= read -r -d '' argument; do
+    [[ $argument == *"$overlay"* ]] && return 0
+  done <"/proc/$pid/cmdline"
+  return 1
+}
+
+clean_overlays() {
+  local dry_run=false verbose=false overlay bytes=0 removed=0 active=0
+  local runs_root="$ISO_ROOT/test-runs"
+
+  while (($#)); do
+    case "$1" in
+      --dry-run) dry_run=true ;;
+      --verbose) verbose=true ;;
+      *) fail 'Usage: lab clean [--dry-run] [--verbose]' ;;
+    esac
+    shift
+  done
+
+  if [[ ! -d $runs_root ]]; then
+    echo "Nothing to clean: $runs_root does not exist"
+    return 0
+  fi
+
+  while IFS= read -r -d '' overlay; do
+    if overlay_in_use "$overlay"; then
+      ((active += 1))
+      if $verbose; then
+        echo "keep - active VM overlay: $overlay"
+      fi
+      continue
+    fi
+
+    bytes=$((bytes + $(du -B1 -- "$overlay" | awk '{ print $1 }')))
+    ((removed += 1))
+    if $dry_run; then
+      if $verbose; then
+        echo "would remove - $overlay"
+      fi
+    else
+      rm -f -- "$overlay"
+      [[ ! -e $overlay ]] || fail "Could not remove disposable overlay: $overlay"
+      if $verbose; then
+        echo "removed - $overlay"
+      fi
+    fi
+  done < <(
+    find "$runs_root" -mindepth 4 -maxdepth 4 -type f -name run.qcow2 -print0
+  )
+
+  if $dry_run; then
+    printf 'Would remove %d stopped disposable VM overlay(s), reclaiming %s.\n' \
+      "$removed" "$(human_bytes "$bytes")"
+  else
+    printf 'Removed %d stopped disposable VM overlay(s), reclaiming %s.\n' \
+      "$removed" "$(human_bytes "$bytes")"
+  fi
+  ((active == 0)) || printf 'Kept %d overlay(s) belonging to an active VM.\n' "$active"
+  echo 'Reusable base disks, ISO files, logs, screenshots, and other run evidence were preserved.'
 }
 
 status() {
@@ -348,6 +435,8 @@ Commands:
   accept-keep                Run acceptance and leave the VM available
   shell                      SSH into a VM left by accept-keep
   latest                     Print the newest evidence directory
+  clean [--dry-run] [--verbose]
+                             Remove stopped disposable VM overlays, preserving evidence
   build                      Build an ISO from local Omarchy/package sources
 USAGE
 }
@@ -367,6 +456,7 @@ case "$command" in
   accept-keep) accept_keep "$@" ;;
   shell) shell_guest "$@" ;;
   latest) latest "$@" ;;
+  clean) clean_overlays "$@" ;;
   build) build_iso "$@" ;;
   -h|--help|help|'') usage ;;
   *) fail "Unknown command: $command" ;;

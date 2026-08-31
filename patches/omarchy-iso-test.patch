@@ -1,8 +1,8 @@
 diff --git i/bin/omarchy-iso-test w/bin/omarchy-iso-test
-index 281cf56..0cb05b6 100755
+index 281cf56..255e3d9 100755
 --- i/bin/omarchy-iso-test
 +++ w/bin/omarchy-iso-test
-@@ -21,6 +21,12 @@
+@@ -21,10 +21,18 @@
  #   --sync-omarchy DIR Push DIR's test/acceptance into the guest before running
  #                      (defaults to OMARCHY_PATH when the suite is present)
  #   --sync-all DIR     Push all of DIR (bin/config/shell/test) into the guest
@@ -15,7 +15,17 @@ index 281cf56..0cb05b6 100755
  #   --port PORT        Host port forwarded to guest SSH (default 2222)
  #   --memory MB        VM memory (default 8192)
  #   --timeout SECS     Install timeout (default 2400)
-@@ -45,6 +51,9 @@ KEEP_RUNNING=false
+ #   --keep-running     Leave the acceptance VM running after the suite finishes
++#   --discard-overlay  Delete the disposable run disk after the VM stops
++#   --keep-overlay     Retain the run disk (overrides --discard-overlay)
+ #   --no-preview       Do not open the collected screenshots in imv
+ 
+ set -euo pipefail
+@@ -42,9 +50,13 @@ PROVISION=false
+ REUSE_BASE=false
+ INSTALL_ONLY=false
+ KEEP_RUNNING=false
++DISCARD_OVERLAY=false
  NO_PREVIEW=false
  SYNC_DIR=""
  SYNC_ALL=false
@@ -25,7 +35,12 @@ index 281cf56..0cb05b6 100755
  
  GUEST_USER="omarchy"
  GUEST_PASSWORD="omarchy"
-@@ -60,6 +69,9 @@ while (($#)); do
+@@ -57,9 +69,14 @@ while (($#)); do
+     --reuse-base) REUSE_BASE=true ;;
+     --install-only) INSTALL_ONLY=true ;;
+     --keep-running) KEEP_RUNNING=true ;;
++    --discard-overlay) DISCARD_OVERLAY=true ;;
++    --keep-overlay) DISCARD_OVERLAY=false ;;
      --no-preview) NO_PREVIEW=true ;;
      --sync-omarchy) SYNC_DIR="$2"; shift ;;
      --sync-all) SYNC_DIR="$2"; SYNC_ALL=true; shift ;;
@@ -35,7 +50,7 @@ index 281cf56..0cb05b6 100755
      --port) SSH_PORT="$2"; shift ;;
      --memory) MEMORY="$2"; shift ;;
      --timeout) INSTALL_TIMEOUT="$2"; shift ;;
-@@ -69,6 +81,23 @@ while (($#)); do
+@@ -69,6 +86,23 @@ while (($#)); do
    shift
  done
  
@@ -59,7 +74,23 @@ index 281cf56..0cb05b6 100755
  if [[ -z $SYNC_DIR && -f ${OMARCHY_PATH:-}/test/acceptance ]]; then
    SYNC_DIR="$OMARCHY_PATH"
  fi
-@@ -355,7 +384,10 @@ wait_for_ssh() {
+@@ -188,6 +222,15 @@ cleanup() {
+   if ! $KEEP_RUNNING; then
+     vm_running && log "Stopping test VM"
+     stop_vm
++
++    if $DISCARD_OVERLAY && [[ -f $RUN_DIR/run.qcow2 ]]; then
++      if vm_running; then
++        echo "WARN: VM did not stop; preserving its run overlay: $RUN_DIR/run.qcow2" >&2
++      else
++        rm -f -- "$RUN_DIR/run.qcow2"
++        log "Discarded the stopped VM overlay; run evidence remains in $RUN_DIR"
++      fi
++    fi
+   fi
+ 
+   rm -f "$RUN_DIR/.screen.ppm" "$RUN_DIR/.screen.png"
+@@ -355,7 +398,10 @@ wait_for_ssh() {
  }
  
  session_started() {
@@ -71,7 +102,7 @@ index 281cf56..0cb05b6 100755
  }
  
  ssh_session() {
-@@ -367,7 +399,8 @@ ssh_session() {
+@@ -367,7 +413,8 @@ ssh_session() {
      export LANG=\${LANG:-C.UTF-8}; \
      export HYPRLAND_INSTANCE_SIGNATURE=\$(ls -t \$XDG_RUNTIME_DIR/hypr | head -1); \
      export WAYLAND_DISPLAY=\$(find \$XDG_RUNTIME_DIR -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f\\n' | head -1); \
@@ -81,7 +112,7 @@ index 281cf56..0cb05b6 100755
      export PATH=\$OMARCHY_PATH/bin:\$PATH; \
      $command" </dev/null
  }
-@@ -399,6 +432,10 @@ guest_layer_absent() {
+@@ -399,6 +446,20 @@ guest_layer_absent() {
    ! guest_layer_present "$1"
  }
  
@@ -89,10 +120,20 @@ index 281cf56..0cb05b6 100755
 +  ! session_started
 +}
 +
++clear_startup_notifications() {
++  [[ -n $HOST_TEST ]] || return 0
++
++  wait_for_guest_state "notification service is ready" 15 \
++    ssh_session "omarchy-shell notifications ping >/dev/null" || return 1
++  ssh_session "omarchy-shell notifications dismissAll >/dev/null" || return 1
++  wait_for_guest_state "startup notifications are dismissed" 15 \
++    guest_layer_absent "omarchy-notifications"
++}
++
  cleanup_shortcut_state() {
    ssh_session 'for plugin in omarchy.launcher omarchy.menu omarchy.emojis omarchy.clipboard omarchy.audio; do
      omarchy-shell shell hide "$plugin" >/dev/null 2>&1 || true
-@@ -1063,6 +1106,49 @@ sync_omarchy() {
+@@ -1063,6 +1120,49 @@ sync_omarchy() {
    fi
  }
  
@@ -142,11 +183,15 @@ index 281cf56..0cb05b6 100755
  acceptance_phase() {
    log "Booting acceptance VM from base image overlay"
  
-@@ -1074,15 +1160,22 @@ acceptance_phase() {
+@@ -1074,15 +1174,26 @@ acceptance_phase() {
  
    establish_session
    sync_omarchy
 +  activate_dev_checkout
++  if ! clear_startup_notifications; then
++    capture_console "failure-startup-notifications"
++    return 1
++  fi
  
    local status=0
 -  shortcut_smoke_phase || status=1

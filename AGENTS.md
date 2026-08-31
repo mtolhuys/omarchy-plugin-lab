@@ -29,6 +29,7 @@ The VM commands synchronize the complete source checkout, dev-link the disposabl
 - Keep guest networking behind QEMU user networking and bind SSH forwarding to localhost.
 - Do not pass host secrets, SSH agents, Wayland sockets, Docker sockets, or hardware devices into the guest.
 - Do not delete or rewrite the reusable base image from an experiment. Rebuild it only through `./bin/lab prepare --fresh`.
+- Let ordinary runs discard their stopped copy-on-write disk while preserving the timestamped evidence. Use `accept-keep` for a live guest or `--keep-overlay` only when the stopped guest disk is itself required evidence.
 - A broken or destructive test belongs in a new overlay and must clean up guest state with traps where practical.
 - If a test requires host package changes or privileges, stop and ask; ordinary plugin development should not.
 
