@@ -2,7 +2,7 @@
 
 > A disposable KVM desktop for proving Omarchy plugins where they actually run.
 
-![A real disposable Omarchy session: a plugin UI, QMP-driven interaction, and input reaching a Wayland client.](assets/real-desktop-proof.gif)
+![Omarchy Plugin Lab flow: source enters a disposable VM, real plugin behavior and input are exercised, and evidence is preserved.](assets/real-desktop-proof.gif)
 
 Omarchy Plugin Lab is a local environment for developing and testing Omarchy
 plugins, Hyprland integrations, Quickshell components, and native desktop
