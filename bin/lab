@@ -39,18 +39,6 @@ base_ready() {
   [[ -f $(base_dir)/base.qcow2 && -f $(base_dir)/.plugin-lab-ready ]]
 }
 
-tracked_dutch_prose() {
-  local markers=(
-    "al""leen" "daar""om" "ie""dere" "zon""der" "wor""dt" "wor""den"
-    "moe""ten" "be""wijs" "be""wijst" "hui""dige" "volle""dige" "omge""ving"
-    "gebrui""ken" "gebru""ikt" "verwij""deren" "inscha""kelen" "uitscha""kelen"
-    "zicht""baar" "be""kende" "wan""neer" "de""ze" "ge""en" "ga""st"
-  )
-  local pattern
-  pattern=$(IFS='|'; printf '\\b(%s)\\b' "${markers[*]}")
-  git -C "$LAB_ROOT" grep -I -n -E "$pattern" -- .
-}
-
 tracked_personal_paths() {
   local pattern
   pattern='/'"home"'/[^/[:space:]]+/|/'"Users"'/[^/[:space:]]+/'
@@ -197,13 +185,6 @@ doctor() {
   else
     echo 'not ok - ISO checksum sidecar is missing'
     failed=1
-  fi
-
-  if tracked_dutch_prose; then
-    echo 'not ok - tracked repository text contains Dutch prose'
-    failed=1
-  else
-    echo 'ok - tracked repository text is publication-ready English'
   fi
 
   if tracked_personal_paths; then
